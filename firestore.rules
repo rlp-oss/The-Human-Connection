@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isMasterAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() == 'codygermain032@gmail.com';
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection check document
+    match /test/connection {
+      allow read: if true;
+    }
+
+    // Beta Testers collection
+    match /testers/{testerId} {
+      allow list: if true;
+      allow get: if isValidId(testerId);
+      allow create: if isValidId(testerId);
+      allow update: if isValidId(testerId);
+      allow delete: if isMasterAdmin() && isValidId(testerId);
+    }
+
+    // Feedbacks collection
+    match /feedbacks/{feedbackId} {
+      allow list: if true;
+      allow get: if isValidId(feedbackId);
+      allow create: if isValidId(feedbackId);
+      allow update: if isValidId(feedbackId);
+      allow delete: if isMasterAdmin() && isValidId(feedbackId);
+    }
+
+    // Broadcasts collection (Master Admin only for publishing or deletion)
+    match /broadcasts/{broadcastId} {
+      allow list: if true;
+      allow get: if isValidId(broadcastId);
+      allow create: if isMasterAdmin() && isValidId(broadcastId);
+      allow update: if isMasterAdmin() && isValidId(broadcastId);
+      allow delete: if isMasterAdmin() && isValidId(broadcastId);
+    }
+
+    // Creator Claims collection
+    match /creator_claims/{claimId} {
+      allow list: if true;
+      allow get: if isValidId(claimId);
+      allow create: if isValidId(claimId);
+      allow update: if isValidId(claimId);
+      allow delete: if isMasterAdmin() && isValidId(claimId);
+    }
+
+    // App Badges & C2PA Manifest records (Master Admin exclusive for write/modify/delete)
+    match /app_badges/{badgeId} {
+      allow list: if true;
+      allow get: if isValidId(badgeId);
+      allow create: if isMasterAdmin() && isValidId(badgeId);
+      allow update: if isMasterAdmin() && isValidId(badgeId);
+      allow delete: if isMasterAdmin() && isValidId(badgeId);
+    }
+  }
+}
+

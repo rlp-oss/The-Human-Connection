@@ -1,0 +1,6 @@
+{
+  "name": "humanethicalai",
+  "description": "H.U.M.A.N. Core Framework & Dashboard Interface — Powering Ethical AI apps, managing independent app URLs, 50% subscription royalty distribution, Copyright Owner Portal, and tester onboarding console.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
