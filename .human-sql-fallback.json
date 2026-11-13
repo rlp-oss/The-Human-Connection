@@ -1,0 +1,52 @@
+{
+  "testers": [],
+  "claims": [],
+  "feedback": [],
+  "driveBackups": [],
+  "omegaPayments": [
+    {
+      "id": "omega_evt_mwf6sb15",
+      "eventType": "omega.payment.completed",
+      "sessionId": "sess_smoke_test_001",
+      "appId": "tome-crafter",
+      "appCode": "FT-ETHIC-TOME-2026",
+      "plan": "pro",
+      "email": "dev@human.org",
+      "userId": "usr_123",
+      "rail": "canada-rtr",
+      "corridor": "Global Pool C ($FOOD / $MED)",
+      "amountCents": 10000,
+      "covenantSplitCents": {
+        "grossCents": 10000,
+        "opsInfraCents": 5000,
+        "societyFundCents": 5000,
+        "poolACreatorsCents": 3500,
+        "poolBStewardsCents": 750,
+        "poolCHumanitarianCents": 750,
+        "corridor": "Global Pool C ($FOOD / $MED)",
+        "sdkVersion": "3.0.0-cleanroom"
+      },
+      "covenantSplitUsd": {
+        "grossUsd": 100,
+        "opsInfraUsd": 50,
+        "societyFundUsd": 50,
+        "poolACreatorsUsd": 35,
+        "poolBStewardsUsd": 7.5,
+        "poolCHumanitarianUsd": 7.5,
+        "opsPct": 50,
+        "societyPct": 50,
+        "poolAPctOfSociety": 70,
+        "poolBPctOfSociety": 15,
+        "poolCPctOfSociety": 15,
+        "poolAPctOfGross": 35,
+        "poolBPctOfGross": 7.5,
+        "poolCPctOfGross": 7.5,
+        "corridor": "Global Pool C ($FOOD / $MED)",
+        "sdkVersion": "3.0.0-cleanroom"
+      },
+      "receivedAt": "2026-11-13T16:23:55.865Z"
+    }
+  ],
+  "omegaRecords": [],
+  "contributors": []
+}

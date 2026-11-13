@@ -1,82 +1,86 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  CreditCard, 
-  Copy, 
-  Check, 
-  ExternalLink, 
-  ShieldCheck, 
-  Zap, 
-  Terminal, 
-  CheckCircle2, 
-  AlertCircle, 
-  ArrowRight, 
-  Code2, 
-  Key, 
-  RefreshCw, 
-  Layers, 
-  Globe, 
+import {
+  CreditCard,
+  Copy,
+  Check,
+  ExternalLink,
+  ShieldCheck,
+  Zap,
+  CheckCircle2,
+  AlertCircle,
+  Code2,
+  Key,
+  RefreshCw,
+  Layers,
+  Globe,
   Send,
-  Lock,
-  Sparkles,
-  HelpCircle,
-  FileCode,
-  CheckCheck
 } from 'lucide-react';
 import axios from 'axios';
+import {
+  computeCovenantSplit,
+  createSignedOmegaCheckout,
+  DEFAULT_CORRIDOR,
+  DEFAULT_RAIL,
+  FLEET_APPS_REGISTRY,
+  getOmegaAppUrl,
+  SDK_VERSION,
+} from '../sdk/cleanroomSdk';
 
-interface WebhookInfoState {
+interface GatewayInfoState {
   webhookEndpointUrl: string;
-  hasSecretKey: boolean;
-  hasWebhookSecret: boolean;
+  omegaAppUrl: string;
+  hasGatewaySecret: boolean;
   supportedEvents: string[];
-  mode: string;
+  sdkVersion: string;
+  rail: string;
+  corridor: string;
 }
 
 export const StripeIntegrationGuide: React.FC = () => {
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
-  const [selectedLanguage, setSelectedLanguage] = useState<'python-sdk' | 'node' | 'python' | 'cli'>('python-sdk');
+  const [selectedLanguage, setSelectedLanguage] = useState<'cleanroom-sdk' | 'node' | 'python' | 'curl'>('cleanroom-sdk');
   const [activeStep, setActiveStep] = useState<number>(1);
   const [testAppSource, setTestAppSource] = useState<string>('tome-crafter');
-  const [testAmount, setTestAmount] = useState<number>(49.55);
+  const [testAmount, setTestAmount] = useState<number>(49.0);
   const [testEmail, setTestEmail] = useState<string>('creator.test@ethical-ai.org');
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
-  const [testResult, setTestResult] = useState<{
+  const [testPlan, setTestPlan] = useState<string>('Pro Sovereign');
+  const [isSigning, setIsSigning] = useState<boolean>(false);
+  const [checkoutResult, setCheckoutResult] = useState<{
     success: boolean;
-    status: number;
     message: string;
-    receivedEvent?: any;
-    timestamp?: string;
+    url?: string;
+    sessionId?: string;
+    params?: Record<string, string>;
+    timestamp: string;
   } | null>(null);
 
-  const [webhookInfo, setWebhookInfo] = useState<WebhookInfoState>({
-    webhookEndpointUrl: `${window.location.origin}/api/stripe/webhook`,
-    hasSecretKey: false,
-    hasWebhookSecret: false,
-    supportedEvents: [
-      'invoice.payment_succeeded',
-      'customer.subscription.created',
-      'customer.subscription.updated',
-      'customer.subscription.deleted',
-      'checkout.session.completed',
-      'payment_intent.succeeded',
-      'transfer.created'
-    ],
-    mode: 'Live / Ready'
+  const omegaBaseUrl = getOmegaAppUrl();
+
+  const [gatewayInfo, setGatewayInfo] = useState<GatewayInfoState>({
+    webhookEndpointUrl: `${window.location.origin}/api/omega/webhook`,
+    omegaAppUrl: omegaBaseUrl,
+    hasGatewaySecret: false,
+    supportedEvents: ['omega.payment.completed'],
+    sdkVersion: SDK_VERSION,
+    rail: DEFAULT_RAIL,
+    corridor: DEFAULT_CORRIDOR,
   });
 
-  // Fetch live webhook info from backend
   useEffect(() => {
     const fetchInfo = async () => {
       try {
-        const res = await axios.get('/api/stripe/webhook-info');
-        if (res.data && res.data.webhookEndpointUrl) {
-          setWebhookInfo(res.data);
+        const res = await axios.get('/api/omega/gateway-info');
+        if (res.data) {
+          setGatewayInfo((prev) => ({
+            ...prev,
+            ...res.data,
+            webhookEndpointUrl: res.data.webhookEndpointUrl || `${window.location.origin}/api/omega/webhook`,
+          }));
         }
       } catch {
-        // Fallback with window.location.origin
-        setWebhookInfo(prev => ({
+        setGatewayInfo((prev) => ({
           ...prev,
-          webhookEndpointUrl: `${window.location.origin}/api/stripe/webhook`
+          webhookEndpointUrl: `${window.location.origin}/api/omega/webhook`,
         }));
       }
     };
@@ -89,217 +93,168 @@ export const StripeIntegrationGuide: React.FC = () => {
     setTimeout(() => setCopiedSection(null), 2500);
   };
 
-  const handleRunWebhookSimulation = async () => {
-    setIsSimulating(true);
-    setTestResult(null);
-
-    const mockPayload = {
-      id: `evt_sim_${Date.now().toString(36)}`,
-      object: 'event',
-      api_version: '2023-10-16',
-      created: Math.floor(Date.now() / 1000),
-      type: 'invoice.payment_succeeded',
-      data: {
-        object: {
-          id: `in_test_${Math.random().toString(36).substring(2, 10)}`,
-          object: 'invoice',
-          amount_paid: Math.round(testAmount * 100),
-          customer_email: testEmail,
-          customer_name: 'Verified Beta Tester',
-          currency: 'usd',
-          status: 'paid',
-          subscription: `sub_test_${Math.random().toString(36).substring(2, 8)}`,
-          metadata: {
-            app_source: testAppSource,
-            covenant_pct: '50',
-            provenance_standard: 'C2PA-v2.1',
-            simulation_origin: 'StripeIntegrationGuide'
-          },
-          lines: {
-            data: [
-              {
-                description: `${testAppSource.toUpperCase()} Pro Subscription Plan`,
-                amount: Math.round(testAmount * 100)
-              }
-            ]
-          }
-        }
-      }
-    };
+  const handleGenerateSignedCheckout = async () => {
+    setIsSigning(true);
+    setCheckoutResult(null);
 
     try {
-      const response = await axios.post('/api/stripe/webhook', mockPayload, {
-        headers: {
-          'Content-Type': 'application/json'
-        }
+      const appEntry = FLEET_APPS_REGISTRY[testAppSource as keyof typeof FLEET_APPS_REGISTRY] || FLEET_APPS_REGISTRY['tome-crafter'];
+      const signed = await createSignedOmegaCheckout({
+        app: appEntry.appId,
+        plan: testPlan,
+        target: appEntry.name,
+        amountCents: Math.max(100, Math.round(testAmount * 100)),
+        email: testEmail,
+        corridor: DEFAULT_CORRIDOR,
       });
 
-      setTestResult({
+      setCheckoutResult({
         success: true,
-        status: response.status,
-        message: `Webhook event processed successfully! Status ${response.status} OK. Royalty calculated & logged.`,
-        receivedEvent: response.data,
-        timestamp: new Date().toLocaleTimeString()
+        message: `Server-signed Omega Direct-Rail /pay checkout URL generated (Session: ${signed.sessionId}).`,
+        url: signed.url,
+        sessionId: signed.sessionId,
+        params: signed.params,
+        timestamp: new Date().toLocaleTimeString(),
       });
     } catch (err: any) {
-      setTestResult({
+      setCheckoutResult({
         success: false,
-        status: err.response?.status || 500,
-        message: err.response?.data?.message || err.message || 'Failed to dispatch webhook simulation',
-        timestamp: new Date().toLocaleTimeString()
+        message: err.message || 'Failed to generate signed /pay checkout URL',
+        timestamp: new Date().toLocaleTimeString(),
       });
     } finally {
-      setIsSimulating(false);
+      setIsSigning(false);
     }
   };
 
-  const currentWebhookUrl = webhookInfo.webhookEndpointUrl || `${window.location.origin}/api/stripe/webhook`;
+  const currentWebhookUrl = gatewayInfo.webhookEndpointUrl || `${window.location.origin}/api/omega/webhook`;
+  const split = computeCovenantSplit(testAmount);
 
-  const pythonSdkSnippet = `from human_initiative import InitiativeClient
+  const cleanroomSdkSnippet = `import {
+  computeCovenantSplit,
+  createSignedOmegaCheckout,
+  syncDeliverableToOmega,
+  DEFAULT_CORRIDOR
+} from './src/sdk/cleanroomSdk';
 
-# Initialize with your application credentials and app source tag
-client = InitiativeClient(
-    api_key="hi_live_sec_your_token_here",
-    app_source="ForgeOS App Builder"
-)
+// 1. Compute exact 50% People's Covenant split (Pool A 35%, Pool B 7.5%, Pool C 7.5%)
+const split = computeCovenantSplit(${testAmount.toFixed(2)});
 
-# Triggered when a subscriber successfully pays their monthly invoice
-def handle_successful_payment(customer_email: str, amount_in_cents: int):
-    distribution = client.process_inflow(
-        email=customer_email,
-        amount=amount_in_cents
-    )
-    print(f"Successfully routed \${distribution['net_community_pool']} to The Human Initiative pools.")`;
+// 2. Request server-signed Omega Direct-Rail /pay checkout URL (zero client secrets)
+const checkout = await createSignedOmegaCheckout({
+  app: '${testAppSource}',
+  plan: '${testPlan}',
+  amountCents: ${Math.max(100, Math.round(testAmount * 100))},
+  email: '${testEmail}',
+  corridor: DEFAULT_CORRIDOR,
+});`;
 
-  const nodeCodeSnippet = `// server.js or routes/stripe.js
+  const nodeCodeSnippet = `// server.ts - Node 22 Native Type-Stripping Compatible
 import express from 'express';
-import Stripe from 'stripe';
+import type { Request, Response } from 'express';
+import crypto from 'node:crypto';
+import { computeCovenantSplitCents } from './src/sdk/cleanroomSdk.ts';
 
-const app = express();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-  apiVersion: '2023-10-16',
-});
+app.post('/api/omega/webhook', express.raw({ type: 'application/json' }), (req: Request, res: Response) => {
+  const sig = String(req.headers['x-omega-signature'] || '');
+  const secret = process.env.OMEGA_GATEWAY_SECRET || '';
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
-// IMPORTANT: Webhook handler requires raw body buffer for signature validation
-app.post(
-  '/api/stripe/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-    const sig = req.headers['stripe-signature'];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-    let event;
-    try {
-      event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-    } catch (err) {
-      console.error(\`⚠️ Webhook signature failed: \${err.message}\`);
-      return res.status(400).send(\`Webhook Error: \${err.message}\`);
-    }
-
-    // Intercept subscription & royalty events
-    if (event.type === 'invoice.payment_succeeded') {
-      const invoice = event.data.object;
-      const amountPaid = invoice.amount_paid / 100.00;
-      const appSource = invoice.metadata?.app_source || 'default-app';
-
-      console.log(\`[ROYALTY INFLOW] \${appSource}: $\${amountPaid.toFixed(2)}\`);
-      // Automated 50% Society Fund covenant split is executed here
-    }
-
-    res.status(200).json({ received: true });
+  if (!secret || sig.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'Invalid X-Omega-Signature' });
   }
-);`;
 
-  const pythonFlaskSnippet = `# gateway.py
+  const event = JSON.parse(rawBody.toString('utf8'));
+  if (event.type === 'omega.payment.completed') {
+    const split = computeCovenantSplitCents(event.data?.amount_cents || 0);
+    console.log('[50% PEOPLE COVENANT]', split);
+  }
+  return res.status(200).json({ received: true });
+});`;
+
+  const pythonFlaskSnippet = `# gateway.py - Omega Direct-Rail Signed Webhook Receiver
 from flask import Flask, request, jsonify
-import stripe
+import hmac
+import hashlib
 import os
 
 app = Flask(__name__)
+OMEGA_GATEWAY_SECRET = os.environ.get("OMEGA_GATEWAY_SECRET", "")
 
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
-ENDPOINT_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+@app.route("/api/omega/webhook", methods=["POST"])
+def omega_webhook():
+    raw_body = request.data
+    sig_header = request.headers.get("X-Omega-Signature", "")
+    expected_sig = "sha256=" + hmac.new(
+        OMEGA_GATEWAY_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
 
-@app.route("/api/stripe/webhook", methods=["POST"])
-def stripe_webhook():
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature")
+    if not OMEGA_GATEWAY_SECRET or not hmac.compare_digest(sig_header, expected_sig):
+        return jsonify({"error": "Invalid X-Omega-Signature"}), 401
 
-    try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, ENDPOINT_SECRET
-        )
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
+    event = request.get_json(silent=True) or {}
+    if event.get("type") == "omega.payment.completed":
+        cents = int(event.get("data", {}).get("amount_cents", 0))
+        society_fund = cents - round(cents * 0.50)
+        print(f"[OMEGA PAYMENT] 50% Covenant Fund: {society_fund} cents")
 
-    if event["type"] == "invoice.payment_succeeded":
-        invoice = event["data"]["object"]
-        amount = invoice.get("amount_paid", 0) / 100.00
-        app_source = invoice.get("metadata", {}).get("app_source", "unknown")
-        
-        print(f"[ROYALTY INFLOW] App: {app_source} | Amount: \${amount:.2f}")
-        # Execute Human Initiative revenue distribution engine
+    return jsonify({"received": True}), 200`;
 
-    return jsonify({"status": "success", "processed": True}), 200`;
+  const curlSnippet = `# 1. Verify fleet health endpoint (CORS *)
+curl -i ${window.location.origin}/api/fleet/${testAppSource}/health
 
-  const cliSnippet = `# 1. Install Stripe CLI (macOS: brew install stripe/stripe-cli/stripe)
-# 2. Login to your Stripe account
-stripe login
-
-# 3. Forward all incoming webhook events to your local dev server
-stripe listen --forward-to ${currentWebhookUrl}
-
-# 4. Trigger a sample invoice payment event to test the integration
-stripe trigger invoice.payment_succeeded`;
+# 2. Sign a /pay checkout URL server-side
+curl -s -X POST ${window.location.origin}/api/omega/sign-checkout \\
+  -H "Content-Type: application/json" \\
+  -d '{"app":"${testAppSource}","plan":"${testPlan}","amount_cents":${Math.max(100, Math.round(testAmount * 100))},"email":"${testEmail}"}'`;
 
   return (
-    <div id="stripe-integration-guide-container" className="space-y-8 pb-12">
+    <div id="omega-integration-guide-container" className="space-y-8 pb-12">
       {/* Header Banner */}
       <div className="rounded-2xl border border-[#E5E0D8] bg-[#FAF8F5] p-6 sm:p-8 shadow-xs">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-mono font-medium bg-[#EAE4DC] text-[#5A5A40] border border-[#DCD5CA]">
               <CreditCard className="w-3.5 h-3.5 text-[#5A5A40]" />
-              <span>Stripe Dashboard Webhook Integration</span>
+              <span>Omega Direct-Rail /pay &amp; Signed Webhook ({gatewayInfo.sdkVersion})</span>
               <span className="w-1.5 h-1.5 rounded-full bg-[#3D6E50] animate-pulse"></span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-serif font-bold text-[#2D2926]">
-              Stripe Integration & Royalty Webhook Guide
+              Omega Direct-Rail (/pay) &amp; 50% Covenant Webhook Guide
             </h1>
             <p className="text-sm sm:text-base text-[#6A655C] max-w-2xl leading-relaxed">
-              Connect your applications to the <strong className="text-[#2D2926]">The H.U.M.A.N. Universal Royalty Initiative</strong>. 
-              Copy the exact production webhook URL below into your Stripe Dashboard so subscription events automatically 
-              trigger the 50% creator covenant & sliding-scale community distributions.
+              Route fleet upgrades and licensing directly to <strong className="text-[#2D2926]">{gatewayInfo.omegaAppUrl}/pay</strong> over the <code className="font-mono text-[#5A5A40]">{gatewayInfo.rail}</code> rail with server-signed HMAC-SHA256 query parameters and timing-safe <code className="font-mono text-[#5A5A40]">X-Omega-Signature</code> webhook verification.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             <a
-              href="https://dashboard.stripe.com/webhooks"
-              target="_blank"
-              rel="noopener noreferrer"
+              href={`${gatewayInfo.omegaAppUrl}/pay`}
+              target="_top"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-[#2D2926] hover:bg-[#403B37] text-[#FAF8F5] shadow-xs transition-colors cursor-pointer"
             >
-              <span>Open Stripe Dashboard</span>
+              <span>Open Omega Hub /pay</span>
               <ExternalLink className="w-4 h-4 text-[#D67D5C]" />
             </a>
           </div>
         </div>
       </div>
 
-      {/* Primary Card: Webhook Endpoint URL */}
+      {/* Primary Card: Signed Webhook Endpoint URL */}
       <div className="rounded-2xl border-2 border-[#D67D5C]/40 bg-[#FFFFFF] p-6 sm:p-8 shadow-xs relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-[#D67D5C]/10 to-transparent rounded-bl-full pointer-events-none"></div>
-
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-[#D67D5C]">
               <Globe className="w-4 h-4" />
-              <span>Your Exact Production Webhook Endpoint URL</span>
+              <span>Production Signed Webhook Receiver URL</span>
             </div>
             <span className="text-xs font-mono text-[#3D6E50] bg-[#EBF3EE] px-2.5 py-1 rounded-full border border-[#C5DEC0] font-medium flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#3D6E50]"></span>
-              Live Endpoint Active
+              {gatewayInfo.hasGatewaySecret ? 'OMEGA_GATEWAY_SECRET Configured' : 'Using Runtime Gateway Secret'}
             </span>
           </div>
 
@@ -321,7 +276,7 @@ stripe trigger invoice.payment_succeeded`;
               {copiedSection === 'main-url' ? (
                 <>
                   <Check className="w-4 h-4" />
-                  <span>Copied to Clipboard!</span>
+                  <span>Copied!</span>
                 </>
               ) : (
                 <>
@@ -334,198 +289,110 @@ stripe trigger invoice.payment_succeeded`;
 
           <p className="text-xs text-[#6A655C] font-mono flex items-center gap-2 pt-1">
             <ShieldCheck className="w-4 h-4 text-[#3D6E50] shrink-0" />
-            <span>Accepts raw JSON payloads authenticated via <code className="bg-[#FAF8F5] px-1.5 py-0.5 rounded border border-[#E5E0D8] text-[#5A5A40]">Stripe-Signature</code> header.</span>
+            <span>
+              Authenticates <code className="bg-[#FAF8F5] px-1.5 py-0.5 rounded border border-[#E5E0D8] text-[#5A5A40]">X-Omega-Signature: sha256=&lt;hmac&gt;</code> for <code className="font-bold">omega.payment.completed</code> events.
+            </span>
           </p>
         </div>
       </div>
 
-      {/* Step-by-Step Dashboard Setup Guide */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-7 space-y-6">
+          {/* 4-Step Omega Protocol Setup */}
           <div className="rounded-2xl border border-[#E5E0D8] bg-[#FFFFFF] p-6 shadow-xs">
             <h2 className="text-lg font-serif font-bold text-[#2D2926] mb-4 flex items-center gap-2">
               <Layers className="w-5 h-5 text-[#5A5A40]" />
-              <span>4-Step Stripe Dashboard Configuration</span>
+              <span>Omega Direct-Rail (/pay) Integration Architecture</span>
             </h2>
 
             <div className="space-y-4">
-              {/* Step 1 */}
-              <div 
-                onClick={() => setActiveStep(1)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  activeStep === 1 
-                    ? 'border-[#5A5A40] bg-[#FAF8F5] shadow-xs' 
-                    : 'border-[#E5E0D8] hover:border-[#DCD5CA] bg-[#FFFFFF]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    activeStep === 1 ? 'bg-[#5A5A40] text-[#FFFFFF]' : 'bg-[#EAE4DC] text-[#5A5A40]'
-                  }`}>
-                    1
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-[#2D2926]">Navigate to Webhook Settings</h3>
-                    <p className="text-xs text-[#6A655C] leading-relaxed">
-                      Log in to the <a href="https://dashboard.stripe.com/webhooks" target="_blank" rel="noreferrer" className="text-[#5A5A40] underline font-medium">Stripe Dashboard</a>, 
-                      go to <strong className="text-[#2D2926]">Developers &rarr; Webhooks</strong>, and click <strong className="text-[#2D2926]">+ Add destination</strong> or <strong className="text-[#2D2926]">+ Add endpoint</strong>.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 2 */}
-              <div 
-                onClick={() => setActiveStep(2)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  activeStep === 2 
-                    ? 'border-[#5A5A40] bg-[#FAF8F5] shadow-xs' 
-                    : 'border-[#E5E0D8] hover:border-[#DCD5CA] bg-[#FFFFFF]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    activeStep === 2 ? 'bg-[#5A5A40] text-[#FFFFFF]' : 'bg-[#EAE4DC] text-[#5A5A40]'
-                  }`}>
-                    2
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-[#2D2926]">Paste the Exact Endpoint URL</h3>
-                    <p className="text-xs text-[#6A655C] leading-relaxed">
-                      In the <span className="font-mono text-[#2D2926]">Endpoint URL</span> field, paste the exact URL from above:
-                    </p>
-                    <div className="mt-2 flex items-center justify-between bg-[#F2ECE4] px-3 py-1.5 rounded-lg border border-[#DCD5CA] text-xs font-mono text-[#2D2926]">
-                      <span className="truncate mr-2">{currentWebhookUrl}</span>
-                      <button 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(currentWebhookUrl, 'step-url');
-                        }}
-                        className="text-[#5A5A40] hover:text-[#2D2926] shrink-0 font-sans text-xs font-medium cursor-pointer"
-                      >
-                        {copiedSection === 'step-url' ? 'Copied' : 'Copy'}
-                      </button>
+              {[
+                {
+                  step: 1,
+                  title: 'Configure Server Environment Variables',
+                  desc: 'Set OMEGA_APP_URL, VITE_OMEGA_APP_URL, and server-only OMEGA_GATEWAY_SECRET. Never expose signing secrets in client bundles.',
+                },
+                {
+                  step: 2,
+                  title: 'Sign Sorted /pay Query Parameters Server-Side',
+                  desc: 'POST /api/omega/sign-checkout sorts app, app_code, amount_cents, corridor, email, plan, rail, return_url, cancel_url, session_id, target, user_id and appends sig=HMAC-SHA256.',
+                },
+                {
+                  step: 3,
+                  title: 'Verify X-Omega-Signature Webhook Events',
+                  desc: 'POST /api/omega/webhook validates X-Omega-Signature: sha256=<hmac> with crypto.timingSafeEqual on raw bytes before unlocking tier entitlements.',
+                },
+                {
+                  step: 4,
+                  title: 'Handle Return URL Activation & 50% Covenant Split',
+                  desc: 'On redirect back with ?omega_status=success&tier=...&session_id=..., persist verified tier status and split gross inflows 50% Ops / 50% Society Fund (Pool A 35%, Pool B 7.5%, Pool C 7.5%).',
+                },
+              ].map((item) => (
+                <div
+                  key={item.step}
+                  onClick={() => setActiveStep(item.step)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer ${
+                    activeStep === item.step
+                      ? 'border-[#5A5A40] bg-[#FAF8F5] shadow-xs'
+                      : 'border-[#E5E0D8] hover:border-[#DCD5CA] bg-[#FFFFFF]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                        activeStep === item.step ? 'bg-[#5A5A40] text-[#FFFFFF]' : 'bg-[#EAE4DC] text-[#5A5A40]'
+                      }`}
+                    >
+                      {item.step}
+                    </div>
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-semibold text-[#2D2926]">{item.title}</h3>
+                      <p className="text-xs text-[#6A655C] leading-relaxed">{item.desc}</p>
                     </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Step 3 */}
-              <div 
-                onClick={() => setActiveStep(3)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  activeStep === 3 
-                    ? 'border-[#5A5A40] bg-[#FAF8F5] shadow-xs' 
-                    : 'border-[#E5E0D8] hover:border-[#DCD5CA] bg-[#FFFFFF]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    activeStep === 3 ? 'bg-[#5A5A40] text-[#FFFFFF]' : 'bg-[#EAE4DC] text-[#5A5A40]'
-                  }`}>
-                    3
-                  </div>
-                  <div className="space-y-2">
-                    <h3 className="text-sm font-semibold text-[#2D2926]">Select Required Royalty & Subscription Events</h3>
-                    <p className="text-xs text-[#6A655C] leading-relaxed">
-                      Click <strong className="text-[#2D2926]">+ Select events</strong> and check the following required events:
-                    </p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                      {[
-                        { name: 'invoice.payment_succeeded', desc: 'Triggers 50% covenant & Heartbeat distribution' },
-                        { name: 'customer.subscription.created', desc: 'Registers new paying subscriber to fleet' },
-                        { name: 'customer.subscription.updated', desc: 'Synchronizes tier and ARPU changes' },
-                        { name: 'customer.subscription.deleted', desc: 'Gracefully ceases royalty streaming' },
-                        { name: 'checkout.session.completed', desc: 'Fulfills access license tokens' },
-                        { name: 'transfer.created', desc: 'Audits payouts to creator Connect accounts' }
-                      ].map((evt) => (
-                        <div key={evt.name} className="flex items-start gap-2 p-2 rounded-lg bg-[#FAF8F5] border border-[#E5E0D8] text-[11px]">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-[#3D6E50] shrink-0 mt-0.5" />
-                          <div>
-                            <code className="font-mono font-bold text-[#2D2926]">{evt.name}</code>
-                            <p className="text-[#6A655C] text-[10px] mt-0.5">{evt.desc}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step 4 */}
-              <div 
-                onClick={() => setActiveStep(4)}
-                className={`p-4 rounded-xl border transition-all cursor-pointer ${
-                  activeStep === 4 
-                    ? 'border-[#5A5A40] bg-[#FAF8F5] shadow-xs' 
-                    : 'border-[#E5E0D8] hover:border-[#DCD5CA] bg-[#FFFFFF]'
-                }`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    activeStep === 4 ? 'bg-[#5A5A40] text-[#FFFFFF]' : 'bg-[#EAE4DC] text-[#5A5A40]'
-                  }`}>
-                    4
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-semibold text-[#2D2926]">Save & Copy Signing Secret</h3>
-                    <p className="text-xs text-[#6A655C] leading-relaxed">
-                      Click <strong className="text-[#2D2926]">Add endpoint</strong>. On the resulting page, click <strong className="text-[#2D2926]">Reveal secret</strong> under <em>Signing secret</em> and set it in your environment variables:
-                    </p>
-                    <div className="mt-2 bg-[#2D2926] text-[#FAF8F5] p-3 rounded-lg font-mono text-xs flex items-center justify-between">
-                      <code>STRIPE_WEBHOOK_SECRET=whsec_your_secret_here</code>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard('STRIPE_WEBHOOK_SECRET=whsec_', 'env-var');
-                        }}
-                        className="text-[#D67D5C] hover:text-[#FAF8F5] text-xs font-sans ml-2 cursor-pointer"
-                      >
-                        {copiedSection === 'env-var' ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* Metadata Schema Card */}
+          {/* Query Parameter & Covenant Spec Table */}
           <div className="rounded-2xl border border-[#E5E0D8] bg-[#FAF8F5] p-6 shadow-xs space-y-4">
             <div className="flex items-center gap-2">
               <Key className="w-5 h-5 text-[#5A5A40]" />
               <h3 className="text-base font-serif font-bold text-[#2D2926]">
-                Subscription Metadata Schema for App Fleet
+                Sorted /pay Query Contract &amp; 50% Covenant Measurements
               </h3>
             </div>
-            <p className="text-xs text-[#6A655C] leading-relaxed">
-              When creating Stripe Checkout Sessions or Subscriptions from your apps, include these metadata keys so the webhook engine automatically attributes royalties:
-            </p>
 
             <div className="overflow-x-auto rounded-xl border border-[#E5E0D8] bg-[#FFFFFF]">
               <table className="w-full text-left text-xs font-mono">
                 <thead className="bg-[#F2ECE4] text-[#5A5A40] border-b border-[#E5E0D8]">
                   <tr>
-                    <th className="p-2.5 font-bold">Metadata Key</th>
-                    <th className="p-2.5 font-bold">Example Value</th>
-                    <th className="p-2.5 font-bold">Description</th>
+                    <th className="p-2.5 font-bold">Parameter / Pool</th>
+                    <th className="p-2.5 font-bold">Value</th>
+                    <th className="p-2.5 font-bold">Protocol Role</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E5E0D8] text-[#2D2926]">
                   <tr>
-                    <td className="p-2.5 text-[#D67D5C] font-bold">app_source</td>
-                    <td className="p-2.5">"tome-crafter" | "rlm-pro-studio"</td>
-                    <td className="p-2.5 text-[#6A655C] font-sans">Identifies which software suite generated the subscription</td>
+                    <td className="p-2.5 text-[#D67D5C] font-bold">rail / corridor</td>
+                    <td className="p-2.5">canada-rtr / Global Pool C ($FOOD / $MED)</td>
+                    <td className="p-2.5 text-[#6A655C] font-sans">Direct-rail sovereign settlement corridor</td>
                   </tr>
                   <tr>
-                    <td className="p-2.5 text-[#D67D5C] font-bold">covenant_pct</td>
-                    <td className="p-2.5">"50" (or sliding scale)</td>
-                    <td className="p-2.5 text-[#6A655C] font-sans">Enforces exact percentage designated for human creators</td>
+                    <td className="p-2.5 text-[#D67D5C] font-bold">Pool A (Creators)</td>
+                    <td className="p-2.5">70% of Society Fund (35% gross)</td>
+                    <td className="p-2.5 text-[#6A655C] font-sans">Direct verified human creator royalties</td>
                   </tr>
                   <tr>
-                    <td className="p-2.5 text-[#D67D5C] font-bold">creator_c2pa_hash</td>
-                    <td className="p-2.5">"urn:c2pa:0x88f...a12"</td>
-                    <td className="p-2.5 text-[#6A655C] font-sans">Optional cryptographic attribution stamp for specific artisan libraries</td>
+                    <td className="p-2.5 text-[#D67D5C] font-bold">Pool B (Stewards)</td>
+                    <td className="p-2.5">15% of Society Fund (7.5% gross)</td>
+                    <td className="p-2.5 text-[#6A655C] font-sans">Cleanroom OSS maintainers &amp; commons</td>
+                  </tr>
+                  <tr>
+                    <td className="p-2.5 text-[#D67D5C] font-bold">Pool C ($FOOD / $MED)</td>
+                    <td className="p-2.5">15% of Society Fund (7.5% gross)</td>
+                    <td className="p-2.5 text-[#6A655C] font-sans">Humanitarian relief corridor allocation</td>
                   </tr>
                 </tbody>
               </table>
@@ -533,108 +400,140 @@ stripe trigger invoice.payment_succeeded`;
           </div>
         </div>
 
-        {/* Live Simulator & Code Snippets */}
+        {/* Live Signed Checkout Builder & Code Samples */}
         <div className="lg:col-span-5 space-y-6">
-          {/* Live Webhook Test Simulator */}
           <div className="rounded-2xl border-2 border-[#5A5A40]/30 bg-[#FFFFFF] p-6 shadow-xs space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-5 h-5 text-[#5A5A40]" />
                 <h3 className="text-base font-serif font-bold text-[#2D2926]">
-                  Live Webhook Test Simulator
+                  Signed /pay Checkout Generator
                 </h3>
               </div>
               <span className="text-[11px] font-mono text-[#5A5A40] bg-[#FAF8F5] px-2 py-0.5 rounded border border-[#E5E0D8]">
-                Sandbox Ready
+                HMAC-SHA256
               </span>
             </div>
 
-            <p className="text-xs text-[#6A655C] leading-relaxed">
-              Trigger a realistic <code className="bg-[#FAF8F5] px-1 py-0.5 rounded text-[#2D2926] font-mono">invoice.payment_succeeded</code> test payload directly against our live endpoint to verify end-to-end event handling.
-            </p>
-
             <div className="space-y-3 pt-1">
               <div>
-                <label className="block text-xs font-mono text-[#5A5A40] mb-1">Target Application</label>
+                <label className="block text-xs font-mono text-[#5A5A40] mb-1">Fleet Application</label>
                 <select
                   value={testAppSource}
                   onChange={(e) => setTestAppSource(e.target.value)}
                   className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
                 >
-                  <option value="tome-crafter">Tome Crafter ($29.00/mo - AI Book Studio)</option>
-                  <option value="rlm-pro-studio">RLM Pro Studio ($49.55/mo - Audio & Lyria Engine)</option>
-                  <option value="forgeos">ForgeOS App Builder ($99.00/mo - AST Code Engine)</option>
-                  <option value="rl-easy-flow">RL Easy Flow ($39.00/mo - Visual Workflow)</option>
+                  {Object.values(FLEET_APPS_REGISTRY).map((app) => (
+                    <option key={app.appId} value={app.appId}>
+                      {app.name} ({app.code})
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-mono text-[#5A5A40] mb-1">Amount ($ USD)</label>
+                  <label className="block text-xs font-mono text-[#5A5A40] mb-1">Plan Tier</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={testAmount}
-                    onChange={(e) => setTestAmount(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
+                    type="text"
+                    value={testPlan}
+                    onChange={(e) => setTestPlan(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926]"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-mono text-[#5A5A40] mb-1">Customer Email</label>
+                  <label className="block text-xs font-mono text-[#5A5A40] mb-1">Amount ($ USD)</label>
                   <input
-                    type="email"
-                    value={testEmail}
-                    onChange={(e) => setTestEmail(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926] focus:outline-none focus:ring-1 focus:ring-[#5A5A40]"
+                    type="number"
+                    step="0.50"
+                    value={testAmount}
+                    onChange={(e) => setTestAmount(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926]"
                   />
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-mono text-[#5A5A40] mb-1">Customer Email</label>
+                <input
+                  type="email"
+                  value={testEmail}
+                  onChange={(e) => setTestEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-[#DCD5CA] bg-[#FAF8F5] text-xs font-mono text-[#2D2926]"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E5E0D8] font-mono text-[11px] space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-[#6A655C]">Ops &amp; Infra (50%):</span>
+                  <strong>${split.opsInfraUsd.toFixed(2)}</strong>
+                </div>
+                <div className="flex justify-between text-[#3D6E50]">
+                  <span>Pool A Creators (35%):</span>
+                  <strong>${split.poolACreatorsUsd.toFixed(2)}</strong>
+                </div>
+                <div className="flex justify-between text-[#5A5A40]">
+                  <span>Pool B Stewards (7.5%):</span>
+                  <strong>${split.poolBStewardsUsd.toFixed(2)}</strong>
+                </div>
+                <div className="flex justify-between text-[#D67D5C]">
+                  <span>Pool C $FOOD/$MED (7.5%):</span>
+                  <strong>${split.poolCHumanitarianUsd.toFixed(2)}</strong>
+                </div>
+              </div>
+
               <button
-                id="run-webhook-sim-btn"
-                onClick={handleRunWebhookSimulation}
-                disabled={isSimulating}
+                id="generate-signed-checkout-btn"
+                onClick={handleGenerateSignedCheckout}
+                disabled={isSigning}
                 className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-medium text-xs bg-[#2D2926] hover:bg-[#403B37] text-[#FAF8F5] shadow-xs transition-colors cursor-pointer disabled:opacity-50"
               >
-                {isSimulating ? (
+                {isSigning ? (
                   <>
                     <RefreshCw className="w-4 h-4 animate-spin text-[#D67D5C]" />
-                    <span>Dispatching Cryptographic Event...</span>
+                    <span>Signing Sorted Query Payload...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4 text-[#D67D5C]" />
-                    <span>Send Test Webhook Event (200 OK Check)</span>
+                    <span>Generate Signed /pay Checkout URL</span>
                   </>
                 )}
               </button>
 
-              {/* Simulation Result */}
-              {testResult && (
-                <div className={`p-4 rounded-xl border text-xs space-y-2 animate-fadeIn ${
-                  testResult.success 
-                    ? 'bg-[#EBF3EE] border-[#C5DEC0] text-[#2D2926]' 
-                    : 'bg-[#FDF2F0] border-[#F1C4BD] text-[#8C2E24]'
-                }`}>
+              {checkoutResult && (
+                <div
+                  className={`p-4 rounded-xl border text-xs space-y-2 ${
+                    checkoutResult.success
+                      ? 'bg-[#EBF3EE] border-[#C5DEC0] text-[#2D2926]'
+                      : 'bg-[#FDF2F0] border-[#F1C4BD] text-[#8C2E24]'
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <span className="font-bold flex items-center gap-1.5">
-                      {testResult.success ? (
+                      {checkoutResult.success ? (
                         <CheckCircle2 className="w-4 h-4 text-[#3D6E50]" />
                       ) : (
                         <AlertCircle className="w-4 h-4 text-[#8C2E24]" />
                       )}
-                      <span>HTTP {testResult.status} {testResult.success ? 'Success' : 'Error'}</span>
+                      <span>{checkoutResult.success ? 'HMAC Signed URL Ready' : 'Signing Error'}</span>
                     </span>
-                    <span className="text-[10px] font-mono text-[#6A655C]">{testResult.timestamp}</span>
+                    <span className="text-[10px] font-mono text-[#6A655C]">{checkoutResult.timestamp}</span>
                   </div>
-                  <p className="text-[11px] leading-relaxed font-mono">{testResult.message}</p>
-                  
-                  {testResult.success && (
-                    <div className="pt-2 border-t border-[#C5DEC0] flex items-center justify-between text-[11px]">
-                      <span className="text-[#3D6E50] font-semibold">50% Covenant Escrow:</span>
-                      <span className="font-mono font-bold text-[#2D2926]">
-                        ${(testAmount * 0.50).toFixed(2)} USD allocated
-                      </span>
+                  <p className="text-[11px] font-mono">{checkoutResult.message}</p>
+                  {checkoutResult.url && (
+                    <div className="space-y-2 pt-1">
+                      <div className="p-2 rounded bg-[#FFFFFF] border border-[#C5DEC0] font-mono text-[10px] break-all select-all max-h-24 overflow-y-auto">
+                        {checkoutResult.url}
+                      </div>
+                      <a
+                        href={checkoutResult.url}
+                        target="_top"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D67D5C] hover:bg-[#C4704F] text-white text-xs font-semibold"
+                      >
+                        <span>Proceed to Omega /pay</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
                     </div>
                   )}
                 </div>
@@ -644,25 +543,23 @@ stripe trigger invoice.payment_succeeded`;
 
           {/* Implementation Snippets */}
           <div className="rounded-2xl border border-[#E5E0D8] bg-[#2D2926] text-[#FAF8F5] p-6 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <div className="flex items-center gap-2">
                 <Code2 className="w-5 h-5 text-[#D67D5C]" />
-                <h3 className="text-sm font-serif font-bold text-[#FAF8F5]">
-                  Verification Code Samples
-                </h3>
+                <h3 className="text-sm font-serif font-bold text-[#FAF8F5]">Cleanroom SDK &amp; Webhook Samples</h3>
               </div>
               <div className="flex flex-wrap items-center gap-1 bg-[#403B37] p-0.5 rounded-lg text-[10px] font-mono">
-                {(['python-sdk', 'node', 'python', 'cli'] as const).map((lang) => (
+                {(['cleanroom-sdk', 'node', 'python', 'curl'] as const).map((lang) => (
                   <button
                     key={lang}
                     onClick={() => setSelectedLanguage(lang)}
-                    className={`px-2.5 py-1 rounded cursor-pointer transition-colors ${
-                      selectedLanguage === lang 
-                        ? 'bg-[#D67D5C] text-[#FFFFFF] font-bold' 
+                    className={`px-2 py-1 rounded cursor-pointer transition-colors ${
+                      selectedLanguage === lang
+                        ? 'bg-[#D67D5C] text-[#FFFFFF] font-bold'
                         : 'text-[#C5BEB3] hover:text-[#FAF8F5]'
                     }`}
                   >
-                    {lang === 'python-sdk' ? 'Python SDK' : lang === 'node' ? 'Node.js' : lang === 'python' ? 'Flask Python' : 'Stripe CLI'}
+                    {lang === 'cleanroom-sdk' ? 'Cleanroom SDK' : lang === 'node' ? 'Node 22' : lang === 'python' ? 'Flask' : 'cURL'}
                   </button>
                 ))}
               </div>
@@ -671,17 +568,25 @@ stripe trigger invoice.payment_succeeded`;
             <div className="relative">
               <pre className="p-3.5 rounded-xl bg-[#1A1816] border border-[#403B37] text-[11px] font-mono text-[#DCD5CA] overflow-x-auto max-h-72 leading-relaxed">
                 <code>
-                  {selectedLanguage === 'python-sdk' && pythonSdkSnippet}
+                  {selectedLanguage === 'cleanroom-sdk' && cleanroomSdkSnippet}
                   {selectedLanguage === 'node' && nodeCodeSnippet}
                   {selectedLanguage === 'python' && pythonFlaskSnippet}
-                  {selectedLanguage === 'cli' && cliSnippet}
+                  {selectedLanguage === 'curl' && curlSnippet}
                 </code>
               </pre>
               <button
-                onClick={() => copyToClipboard(
-                  selectedLanguage === 'python-sdk' ? pythonSdkSnippet : selectedLanguage === 'node' ? nodeCodeSnippet : selectedLanguage === 'python' ? pythonFlaskSnippet : cliSnippet,
-                  'snippet'
-                )}
+                onClick={() =>
+                  copyToClipboard(
+                    selectedLanguage === 'cleanroom-sdk'
+                      ? cleanroomSdkSnippet
+                      : selectedLanguage === 'node'
+                      ? nodeCodeSnippet
+                      : selectedLanguage === 'python'
+                      ? pythonFlaskSnippet
+                      : curlSnippet,
+                    'snippet'
+                  )
+                }
                 className="absolute top-2.5 right-2.5 p-1.5 rounded-lg bg-[#2D2926]/80 hover:bg-[#403B37] text-[#FAF8F5] border border-[#5A5A40] text-xs flex items-center gap-1 cursor-pointer transition-colors"
                 title="Copy code"
               >

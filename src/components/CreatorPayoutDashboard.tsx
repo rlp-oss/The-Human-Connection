@@ -52,6 +52,7 @@ import {
   RoyaltyDistributionPlan, 
   CreatorPayoutAllocation 
 } from '../services/StripeDistributionService';
+import { computeCovenantSplit, createSignedOmegaCheckout, DEFAULT_CORRIDOR } from '../sdk/cleanroomSdk';
 
 interface CreatorPayoutDashboardProps {
   claims: CopyrightClaim[];
@@ -76,10 +77,11 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
   const [selectedCreatorEmail, setSelectedCreatorEmail] = useState<string>('all');
   const [payoutLoading, setPayoutLoading] = useState(false);
   const [payoutSuccessMsg, setPayoutSuccessMsg] = useState<string | null>(null);
+  const [payoutErrorMsg, setPayoutErrorMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'available' | 'pending'>('all');
   const [searchTerm, setSearchTerm] = useState('');
 
-  // 40% Society Fund State via StripeDistributionService
+  // 50% People's Covenant Society Fund State via StripeDistributionService
   const [metrics, setMetrics] = useState<SocietyFundMetrics | null>(null);
   const [appSubs, setAppSubs] = useState<AppSubscriptionTally[]>([]);
   const [unregisteredEscrow, setUnregisteredEscrow] = useState<UnregisteredEscrowClaim[]>([]);
@@ -178,10 +180,11 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
         origin: { y: 0.65 },
         colors: ['#3D6E50', '#D67D5C', '#5A5A40'],
       });
-      setPayoutSuccessMsg(`🎉 New Subscriber on ${split.sourceAppName}! +$${split.grossAmountUsd.toFixed(2)} ($${split.societyFundSplitUsd.toFixed(2)} 40% immediately routed to Society Fund in Stripe Connect)`);
+      setPayoutErrorMsg(null);
+      setPayoutSuccessMsg(`New Subscriber on ${split.sourceAppName}! +$${split.grossAmountUsd.toFixed(2)} ($${split.societyFundSplitUsd.toFixed(2)} — 50% People's Covenant routed across Pool A/B/C)`);
       setTimeout(() => setPayoutSuccessMsg(null), 6000);
     } catch (err: any) {
-      alert('Subscription simulation error: ' + err.message);
+      setPayoutErrorMsg('Subscription simulation error: ' + err.message);
     } finally {
       setIsSimulatingSub(false);
     }
@@ -214,10 +217,11 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
         origin: { y: 0.55 },
         colors: ['#5A5A40', '#3D6E50', '#D67D5C', '#10B981'],
       });
-      setPayoutSuccessMsg(`✅ 40% Society Fund Distribution Executed: Disbursed $${result.totalPaidUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} across ${result.creatorsPaidCount} registered creators via Stripe Connect Batch (${result.stripeBatchTransferId})!`);
+      setPayoutErrorMsg(null);
+      setPayoutSuccessMsg(`50% People's Covenant Distribution Executed: Disbursed $${result.totalPaidUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} across ${result.creatorsPaidCount} registered creators (${result.stripeBatchTransferId})!`);
       setTimeout(() => setPayoutSuccessMsg(null), 8000);
     } catch (e: any) {
-      alert('Distribution execution failed: ' + e.message);
+      setPayoutErrorMsg('Distribution execution failed: ' + e.message);
     } finally {
       setIsExecutingDistribution(false);
     }
@@ -246,10 +250,11 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
         origin: { y: 0.6 },
         colors: ['#3D6E50', '#D67D5C', '#5A5A40'],
       });
-      setPayoutSuccessMsg(`🎉 Copyright Claim Registered! Released $${res.claimedAmount.toFixed(2)} from holding escrow to ${claimNameInput}'s verified Stripe Connect balance!`);
+      setPayoutErrorMsg(null);
+      setPayoutSuccessMsg(`Copyright Claim Registered! Released $${res.claimedAmount.toFixed(2)} from holding escrow to ${claimNameInput}'s verified account.`);
       setTimeout(() => setPayoutSuccessMsg(null), 6000);
     } catch (err: any) {
-      alert('Claim submission failed: ' + err.message);
+      setPayoutErrorMsg('Claim submission failed: ' + err.message);
     } finally {
       setIsClaimSubmitting(false);
     }
@@ -257,12 +262,13 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
 
   const handleInstantPayoutAll = async () => {
     if (totalAvailable <= 0) {
-      alert('No available liquid balance to disburse right now.');
+      setPayoutErrorMsg('No available liquid balance to disburse right now.');
       return;
     }
 
     setPayoutLoading(true);
     setPayoutSuccessMsg(null);
+    setPayoutErrorMsg(null);
 
     try {
       for (const claim of filteredClaims) {
@@ -278,13 +284,29 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
         colors: ['#3D6E50', '#D67D5C', '#5A5A40'],
       });
 
-      setPayoutSuccessMsg(`Successfully disbursed $${totalAvailable.toFixed(2)} via Stripe Connect Instant Payout!`);
+      setPayoutSuccessMsg(`Successfully disbursed $${totalAvailable.toFixed(2)} via Omega Direct-Rail Instant Payout!`);
       onRefresh();
       setTimeout(() => setPayoutSuccessMsg(null), 5000);
     } catch (err: any) {
-      alert('Payout execution error: ' + err.message);
+      setPayoutErrorMsg('Payout execution error: ' + err.message);
     } finally {
       setPayoutLoading(false);
+    }
+  };
+
+  const handleLaunchDirectRailCheckout = async () => {
+    try {
+      setPayoutErrorMsg(null);
+      const signed = await createSignedOmegaCheckout({
+        app: 'human-hub',
+        plan: 'Sovereign Patron',
+        target: '50% People Covenant Direct-Rail',
+        amountCents: 4900,
+        corridor: DEFAULT_CORRIDOR,
+      });
+      window.location.assign(signed.url);
+    } catch (err: any) {
+      setPayoutErrorMsg('Unable to launch Omega Direct-Rail /pay checkout: ' + err.message);
     }
   };
 
@@ -303,31 +325,31 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
     {
       id: 'tx_pay_901',
       date: '2026-08-17 14:10 UTC',
-      type: '40% Subscription Society Split',
+      type: '50% People Covenant Society Split',
       work: 'Tome Crafter Complete Drafting Engine',
       app: 'Tome Crafter',
       amount_usd: 424.48,
       status: 'Paid',
-      stripe_transfer_id: 'tr_1NZe44StripeConnectPaid',
+      stripe_transfer_id: 'tr_1NZe44OmegaDirectPaid',
       destination: 'JPMorgan Chase (•••• 4242)',
       c2pa_hash: '0x633270612e6175646974...cody',
     },
     {
       id: 'tx_pay_902',
       date: '2026-08-18 09:30 UTC',
-      type: '40% Subscription Society Split',
+      type: '50% People Covenant Society Split',
       work: 'Harmonic Stems Vol. 4',
       app: 'RLM Pro Studio',
       amount_usd: 424.48,
       status: 'Paid',
-      stripe_transfer_id: 'tr_1NZm99StripeAudioDirect',
+      stripe_transfer_id: 'tr_1NZm99OmegaDirectAudio',
       destination: 'Wells Fargo (•••• 8819)',
       c2pa_hash: '0x633270612e6175646974...marcus',
     },
     {
       id: 'tx_pay_903',
       date: '2026-08-18 16:45 UTC',
-      type: '40% Subscription Society Split',
+      type: '50% People Covenant Society Split',
       work: 'ReForgeOS AST Cleanroom Kernel',
       app: 'ForgeOS App Builders',
       amount_usd: 512.60,
@@ -404,21 +426,38 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `human_40pct_society_fund_payouts_${new Date().toISOString().substring(0, 10)}.csv`);
+    link.setAttribute('download', `human_50pct_society_fund_payouts_${new Date().toISOString().substring(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  const fundTotal = metrics?.total_society_fund_usd || 76408.00;
   const grossMRR = metrics?.total_subscription_revenue_usd || 191020.00;
+  const covenantSplit = computeCovenantSplit(grossMRR);
+  const fundTotal = metrics?.total_society_fund_usd || covenantSplit.societyFundUsd;
   const totalSubs = metrics?.total_active_subscribers || 4080;
   const holdingEscrow = metrics?.unallocated_holding_escrow_usd || 14280.00;
-  const registeredPool = metrics?.allocated_registered_pool_usd || 62128.00;
-  const perCreatorEst = metrics?.estimated_payout_per_registered_creator || 424.48;
+  const registeredPool = metrics?.allocated_registered_pool_usd || Math.max(0, fundTotal - holdingEscrow);
+  const perCreatorEst = metrics?.estimated_payout_per_registered_creator || 530.61;
 
   return (
     <div className="space-y-8">
+      {/* Error Banner */}
+      {payoutErrorMsg && (
+        <div className="p-4 rounded-2xl bg-[#FDF2F0] border-2 border-[#F1C4BD] text-[#8C2E24] flex items-center justify-between shadow-md animate-fade-in">
+          <div className="flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-[#8C2E24] shrink-0" />
+            <span className="text-xs sm:text-sm font-semibold">{payoutErrorMsg}</span>
+          </div>
+          <button
+            onClick={() => setPayoutErrorMsg(null)}
+            className="text-xs font-mono text-[#8C2E24] hover:opacity-75 p-1 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Toast Banner */}
       {payoutSuccessMsg && (
         <div className="p-4 rounded-2xl bg-[#EBF3ED] border-2 border-[#3D6E50]/40 text-[#2D2926] flex items-center justify-between shadow-md animate-fade-in">
@@ -435,27 +474,36 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
         </div>
       )}
 
-      {/* 40% SOCIETY FUND CORE HERO */}
+      {/* 50% PEOPLE'S COVENANT SOCIETY FUND CORE HERO */}
       <div className="rounded-2xl border-2 border-[#5A5A40]/30 bg-[#FFFFFF] p-6 sm:p-8 space-y-6 shadow-sm relative overflow-hidden">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FAF8F5] border border-[#5A5A40]/30 text-xs font-mono text-[#5A5A40] font-bold">
               <Scale className="w-3.5 h-3.5 text-[#5A5A40]" />
-              <span>H.U.M.A.N. 40% Subscription Royalty Protocol</span>
+              <span>H.U.M.A.N. 50% People&apos;s Covenant Royalty Protocol</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-bold text-[#2D2926] tracking-tight flex items-center gap-3 flex-wrap">
-              <span>Society Fund & Creator Distribution Hub</span>
+              <span>Society Fund &amp; Creator Distribution Hub</span>
               <span className="text-xs font-mono font-bold bg-[#FAF0EC] text-[#D67D5C] px-3 py-1 rounded-full border border-[#EECDBC]">
-                40% Auto-Split via StripeDistributionService
+                50% Ops / 50% Society Fund (Pool A/B/C)
               </span>
             </h2>
             <p className="text-xs sm:text-sm text-[#6A655C] leading-relaxed">
-              <strong>The 40% Society Rule:</strong> Exactly 40% of every subscription paid across all apps carrying the H.U.M.A.N. badge goes <em>immediately</em> into the non-profit Society Fund in Stripe Connect. Funds stay in holding escrow until copyright creators are registered. As total subscribers grow across the badge fleet, the pool surges and payouts per registered creator increase dynamically.
+              <strong>The 50% People&apos;s Covenant:</strong> 50% funds Infrastructure &amp; Ops (${covenantSplit.opsInfraUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}) and 50% enters the Society Covenant Fund (${covenantSplit.societyFundUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}) — split across <strong>Pool A Creators</strong> (70% / 35% gross: ${covenantSplit.poolACreatorsUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}), <strong>Pool B Stewards</strong> (15% / 7.5% gross: ${covenantSplit.poolBStewardsUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}), and <strong>Pool C Humanitarian Aid $FOOD / $MED</strong> (15% / 7.5% gross: ${covenantSplit.poolCHumanitarianUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })}).
             </p>
           </div>
 
           {/* Core Action Buttons */}
           <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <button
+              type="button"
+              onClick={handleLaunchDirectRailCheckout}
+              className="px-4 py-2.5 rounded-xl bg-[#D67D5C] hover:bg-[#C4704F] text-white text-xs font-bold flex items-center gap-2 shadow-2xs transition-all cursor-pointer active:scale-95"
+            >
+              <ExternalLink className="w-4 h-4 text-white" />
+              <span>Omega /pay Checkout</span>
+            </button>
+
             <button
               type="button"
               onClick={() => handleSimulateNewSubscriber()}
@@ -464,7 +512,7 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
               title="Simulate a new subscriber joining any badge app"
             >
               <Zap className="w-4 h-4 text-[#D67D5C]" />
-              <span>{isSimulatingSub ? 'Processing Sub...' : '+ Simulate Subscriber (+40%)'}</span>
+              <span>{isSimulatingSub ? 'Processing Sub...' : '+ Simulate Subscriber (+50%)'}</span>
             </button>
 
             <button
@@ -485,7 +533,7 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
           <div className="rounded-2xl border border-[#E5E0D8] bg-[#FAF8F5] p-5 space-y-2 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-mono uppercase font-bold text-[#6A655C]">
-                40% Society Fund Pool
+                50% Society Fund Pool
               </span>
               <div className="p-1.5 rounded-lg bg-[#FFFFFF] border border-[#DCD5CA]">
                 <Landmark className="w-4 h-4 text-[#5A5A40]" />
@@ -496,7 +544,7 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
             </div>
             <div className="text-[11px] font-mono text-[#6A655C] flex items-center justify-between pt-1 border-t border-[#E5E0D8]">
               <span>Gross MRR: ${grossMRR.toLocaleString('en-US', { minimumFractionDigits: 0 })}</span>
-              <span className="font-bold text-[#3D6E50]">40% Cut</span>
+              <span className="font-bold text-[#3D6E50]">50% Covenant</span>
             </div>
           </div>
 
@@ -704,13 +752,13 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
               </h3>
             </div>
             <p className="text-xs text-[#6A655C]">
-              Adjust the subscriber count slider for each app to observe how the 40% Society Fund and per-creator royalty payouts scale dynamically.
+              Adjust the subscriber count slider for each app to observe how the 50% People&apos;s Covenant Fund and per-creator royalty payouts scale dynamically.
             </p>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs font-mono text-[#3D6E50] bg-[#EBF3ED] px-2.5 py-1 rounded-md border border-[#C9D1BE] font-semibold">
-              Flywheel Active: +$18.73/sub yield
+              Flywheel Active: +$23.41/sub yield
             </span>
           </div>
         </div>
@@ -763,14 +811,14 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
                 />
               </div>
 
-              {/* Revenue & 40% Split Matrix */}
+              {/* Revenue & 50% Split Matrix */}
               <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#E5E0D8] text-xs font-mono">
                 <div className="p-2 rounded-xl bg-[#FFFFFF] border border-[#E5E0D8]">
                   <span className="text-[10px] text-[#8C857B] block uppercase">Gross MRR</span>
                   <strong className="text-[#2D2926]">${app.gross_monthly_mrr.toLocaleString('en-US', { minimumFractionDigits: 0 })}</strong>
                 </div>
                 <div className="p-2 rounded-xl bg-[#FAF0EC] border border-[#EECDBC]">
-                  <span className="text-[10px] text-[#D67D5C] block uppercase font-bold">40% Society Cut</span>
+                  <span className="text-[10px] text-[#D67D5C] block uppercase font-bold">50% Society Cut</span>
                   <strong className="text-[#D67D5C]">${app.society_fund_40pct_contribution.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong>
                 </div>
               </div>
@@ -786,11 +834,11 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
             <div className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-[#D67D5C]" />
               <h3 className="text-base font-bold text-[#2D2926]">
-                Holding Escrow Station (Unclaimed 40% Subscription Royalties)
+                Holding Escrow Station (Unclaimed 50% Subscription Royalties)
               </h3>
             </div>
             <p className="text-xs text-[#6A655C]">
-              40% subscription revenues are safely locked in Stripe Connect escrow until the copyright owner verifies personhood and claims the asset.
+              50% People&apos;s Covenant revenues are safely locked in sovereign escrow until the copyright owner verifies personhood and claims the asset.
             </p>
           </div>
 
@@ -991,7 +1039,7 @@ export const CreatorPayoutDashboard: React.FC<CreatorPayoutDashboardProps> = ({
                 className="px-3.5 py-1.5 rounded-xl bg-[#FAF8F5] hover:bg-[#F2ECE4] border border-[#DCD5CA] text-xs font-mono text-[#5A5A40] flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
               >
                 <Lock className="w-3.5 h-3.5 text-[#5A5A40]" />
-                <span>Stripe Sandbox</span>
+                <span>Omega Direct-Rail /pay</span>
               </button>
             )}
           </div>

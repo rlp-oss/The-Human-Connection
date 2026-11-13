@@ -393,7 +393,8 @@ export const GeminiPodcastVideoStudio: React.FC<GeminiPodcastVideoStudioProps> =
   // Remove Media Asset
   const handleRemoveAsset = (id: string) => {
     if (mediaAssets.length <= 1) {
-      alert('You must keep at least one visual asset in the collage.');
+      setStatusMessage('You must keep at least one visual asset in the collage.');
+      setTimeout(() => setStatusMessage(null), 4000);
       return;
     }
     setMediaAssets((prev) => prev.filter((a) => a.id !== id));

@@ -21,7 +21,7 @@ export const generatePrivacyPolicyPdf = (metadata?: Partial<PrivacyPdfMetadata>)
       },
       {
         name: 'RLM Pro Studio',
-        url: 'https://remix-lyria-studio-5954.ai.studio',
+        url: 'https://rlm-pro-studio.ai.studio',
         vertical: 'Hybrid Audio Production Suite & Stem DAW',
         auditId: 'FT-ETHIC-RLM-AUDIO-2026'
       },

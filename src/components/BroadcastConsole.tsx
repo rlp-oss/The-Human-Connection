@@ -56,7 +56,7 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
 
   const handleDraftWithGemini = async () => {
     if (!topic.trim()) {
-      alert('Please specify an announcement topic or release highlight.');
+      showToast('Please specify an announcement topic or release highlight.');
       return;
     }
 
@@ -66,7 +66,7 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
         appTarget: targetApp,
         topic: topic.trim(),
         tone,
-        extraContext: 'H.U.M.A.N. Protocol: Powering Ethical AI apps, And Paying the People (40% subscription royalty pool).',
+        extraContext: "H.U.M.A.N. Protocol: Powering Ethical AI apps, And Paying the People (50% People's Covenant subscription pool).",
       });
 
       if (draft.subject) setSubject(draft.subject);
@@ -74,9 +74,9 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
       showToast('Gemini AI successfully crafted announcement draft!');
     } catch (err: any) {
       console.error(err);
-      setSubject(`[${targetApp}] Beta Update: New Stripe Connect Micro-Royalty Settlement`);
+      setSubject(`[${targetApp}] Beta Update: Omega Direct-Rail 50% Covenant Settlement`);
       setBodyText(
-        `Dear ${targetApp} Testers,\n\nWe have deployed our latest beta revision with upgraded 5-stage testing guardrails and real-time micro-patronage streaming.\n\nPlease verify your Stripe Sandbox connection in the developer console.\n\nWarm regards,\nCody Germain & The H.U.M.A.N. Team`
+        `Dear ${targetApp} Testers,\n\nWe have deployed our latest revision with Omega Direct-Rail /pay settlement and C2PA v2.1 provenance guardrails.\n\nPlease verify your contributor rail status in the developer console.\n\nWarm regards,\nCody Germain & The H.U.M.A.N. Team`
       );
     } finally {
       setIsDraftingWithAI(false);
@@ -86,7 +86,7 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
   const handleSendBroadcast = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim() || !bodyText.trim()) {
-      alert('Please enter both subject and message body.');
+      showToast('Please enter both subject and message body.');
       return;
     }
 
@@ -112,7 +112,7 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
       setBodyText('');
       setTopic('');
     } catch (err: any) {
-      alert('Failed to send broadcast: ' + err.message);
+      showToast('Failed to send broadcast: ' + err.message);
     } finally {
       setIsSending(false);
     }
@@ -206,14 +206,14 @@ export const BroadcastConsole: React.FC<BroadcastConsoleProps> = ({
               <button
                 type="button"
                 onClick={() => {
-                  setSubject(`[${targetApp}] Beta Update: New Stripe Connect Micro-Royalty Settlement`);
+                  setSubject(`[${targetApp}] Beta Update: Omega Direct-Rail 50% Covenant Settlement`);
                   setBodyText(
-                    `Dear ${targetApp} Testers,\n\nWe have deployed our latest beta revision with upgraded 5-stage testing guardrails and real-time micro-patronage streaming.\n\nPlease verify your Stripe Sandbox connection in the developer console.\n\nWarm regards,\nCody Germain & The H.U.M.A.N. Team`
+                    `Dear ${targetApp} Testers,\n\nWe have deployed our latest revision with Omega Direct-Rail /pay settlement and C2PA v2.1 provenance guardrails.\n\nPlease verify your contributor rail status in the developer console.\n\nWarm regards,\nCody Germain & The H.U.M.A.N. Team`
                   );
                 }}
                 className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#FFFFFF] hover:bg-[#F4EFEA] border border-[#DCD5CA] text-[#5A5A40] transition-colors cursor-pointer"
               >
-                💳 Stripe Micro-Royalty
+                💳 Omega /pay Settlement
               </button>
             </div>
           </div>

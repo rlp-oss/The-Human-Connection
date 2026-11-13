@@ -4,16 +4,14 @@
  * H.U.M.A.N. Initiative: Powering Ethical AI apps, And Paying the People
  * 
  * Manages the core financial routing logic for capturing 50% of subscription 
- * payments from connected apps (Tome Crafter, RLM Pro Studio, ForgeOS App Builders, 
- * RL Easy Flow, ShareShop Pro, etc.) and routing them into the Society Fund pool
- * for automated creator & copyright owner royalty distribution.
- * 
- * Security Notice:
- * In production backend environments, configure the following environment variables:
- * - STRIPE_SECRET_KEY: sk_live_... or sk_test_... for server-side Stripe API calls
- * - STRIPE_SOCIETY_FUND_ACCOUNT_ID: acct_... (Stripe Custom / Express platform account)
- * - STRIPE_WEBHOOK_SECRET: whsec_... for verifying incoming invoice/checkout webhooks
+ * payments from connected apps (Tome Crafter, RLM Pro Studio, ForgeOS, RL Easy Flow)
+ * via Sovereign Omega Direct-Rail (/pay) and routing into the People's Covenant pools:
+ * Pool A Creators (70% of Society Fund / 35% of gross),
+ * Pool B Stewards & Commons (15% of Society Fund / 7.5% of gross),
+ * Pool C Humanitarian Aid $FOOD/$MED (15% of Society Fund / 7.5% of gross).
  */
+
+import { computeCovenantSplit } from '../sdk/cleanroomSdk';
 
 import axios from 'axios';
 import { 
@@ -154,14 +152,15 @@ export class StripeDistributionService {
   public static async captureSubscriptionPayment(
     payment: SubscriptionPaymentEvent
   ): Promise<CapturedSubscriptionSplit> {
-    const grossAmount = Math.max(0, Number(payment.amountUsd) || 0);
-    const societySplit = Number((grossAmount * this.COVENANT_SHARE_PCT).toFixed(2));
-    const operatorShare = Number((grossAmount - societySplit).toFixed(2));
-    const estFee = Number((grossAmount * 0.029 + 0.30).toFixed(2));
+    const split = computeCovenantSplit(Number(payment.amountUsd) || 0);
+    const grossAmount = split.grossUsd;
+    const societySplit = split.societyFundUsd;
+    const operatorShare = split.opsInfraUsd;
+    const estFee = Number((grossAmount * 0.015).toFixed(2));
     const timestamp = payment.timestamp || new Date().toISOString();
 
     const txId = `txn_split_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
-    const transferGroup = `tg_human_50pct_${payment.appId}_${Date.now().toString(36)}`;
+    const transferGroup = `omega_50pct_${payment.appId}_${Date.now().toString(36)}`;
     const auditHash = `0x${Math.random().toString(16).substring(2, 10)}${Date.now().toString(16)}...c2paSplitSeal`;
 
     const splitResult: CapturedSubscriptionSplit = {
@@ -574,52 +573,30 @@ export class StripeDistributionService {
 }
 
 /**
- * Direct Stripe Webhook Event Processor
- * 
- * Captures `invoice.payment_succeeded` events and automatically executes 
- * an immutable 50% transfer into the H.U.M.A.N. Escrow Vault.
- * 
- * @param event Incoming Stripe Event (e.g. from express raw body parser)
- * @param stripeInstance Optional initialized Stripe client
+ * Omega Webhook Event Processor
+ *
+ * Captures `omega.payment.completed` events and executes the immutable 50%
+ * People's Covenant split (Pool A 35% / Pool B 7.5% / Pool C 7.5%).
  */
 export async function handleSubscriptionPayment(
-  event: { type?: string; data: { object: Record<string, any> } },
-  stripeInstance?: any
+  event: { type?: string; data: { object: Record<string, any> } }
 ): Promise<{ success: boolean; grossUsd: number; societySplitUsd: number; transferId?: string }> {
-  const invoice = event.data.object;
-  const grossUsd = (Number(invoice.amount_paid) || 0) / 100;
-  const societySplit = Number((grossUsd * 0.50).toFixed(2)); // Immutable 50% Covenant
+  const payload = event.data.object;
+  const split = computeCovenantSplit((Number(payload.amount_paid || payload.amount_cents) || 0) / 100);
+  const transferId = `omega_cov_${Date.now().toString(36)}`;
 
-  let transferId = `tr_covenant_${Date.now().toString(36)}`;
-
-  // If server-side Stripe SDK is supplied with secret key
-  if (stripeInstance && stripeInstance.transfers && process.env.STRIPE_HUMAN_ESCROW_ACCOUNT_ID) {
-    try {
-      const transfer = await stripeInstance.transfers.create({
-        amount: Math.round(societySplit * 100),
-        currency: 'usd',
-        destination: process.env.STRIPE_HUMAN_ESCROW_ACCOUNT_ID,
-        description: 'H.U.M.A.N. 50% Society Covenant Split'
-      });
-      transferId = transfer.id;
-    } catch (err) {
-      console.warn('Live Stripe transfer fallback to internal ledger:', err);
-    }
-  }
-
-  // Update client & local storage metrics
   await StripeDistributionService.captureSubscriptionPayment({
-    appId: invoice.metadata?.app_id || 'fleet_app',
-    appName: invoice.metadata?.app_name || 'H.U.M.A.N. Certified App',
-    amountUsd: grossUsd,
-    subscriberEmail: invoice.customer_email || 'subscriber@domain.com',
-    stripeInvoiceId: invoice.id || `in_${Date.now()}`
+    appId: payload.metadata?.app_id || payload.app || 'human-hub',
+    appName: payload.metadata?.app_name || 'H.U.M.A.N. Certified App',
+    amountUsd: split.grossUsd,
+    subscriberEmail: payload.customer_email || payload.email || 'subscriber@domain.com',
+    stripeInvoiceId: payload.id || `omega_${Date.now()}`
   });
 
   return {
     success: true,
-    grossUsd,
-    societySplitUsd: societySplit,
+    grossUsd: split.grossUsd,
+    societySplitUsd: split.societyFundUsd,
     transferId
   };
 }

@@ -318,31 +318,24 @@ export const HumanInitiativeService = {
 
   getNodeSdkSnippet(): string {
     return `// =========================================================================
-// @human-initiative/sdk - Node.js / TypeScript Integration
+// H.U.M.A.N. Cleanroom SDK v3.0.0-cleanroom — Node 22 / TypeScript Integration
 // =========================================================================
-import { HumanInitiativeClient } from '@human-initiative/sdk';
+import { computeCovenantSplit, signArtifactC2pa } from './sdk/cleanroomSdk';
 
-const human = new HumanInitiativeClient({
-  apiKey: process.env.HUMAN_INITIATIVE_SECRET_KEY,
-  appName: 'Tome Crafter',
-  stripeConnectAccountId: process.env.STRIPE_CONNECT_ID
-});
+export async function recordCertifiedOutput(payload: unknown, grossUsd: number) {
+  const split = computeCovenantSplit(grossUsd); // 50% Ops | 50% Society (35% Pool A, 7.5% Pool B, 7.5% Pool C)
+  const manifest = await signArtifactC2pa(
+    { payload, split },
+    { appId: 'tome-crafter', corridor: 'Global Pool C ($FOOD / $MED)', grossUsd }
+  );
 
-// Automatic Heartbeat Subscription Split Webhook (50% Baseline)
-export async function handleStripeSubscriptionWebhook(event: Stripe.Event) {
-  if (event.type === 'invoice.payment_succeeded') {
-    const invoice = event.data.object as Stripe.Invoice;
-    const amountUsd = invoice.amount_paid / 100;
-
-    // Dispatches 50%-95% directly into Tier 1 (Food/Health) and Tier 2 (Restitution)
-    const receipt = await human.dispatchHeartbeatContribution({
-      grossAmountUsd: amountUsd,
-      subscriberEmail: invoice.customer_email,
-      c2paManifestHash: invoice.metadata?.c2pa_hash
-    });
-
-    console.log(\`[HUMAN INITIATIVE] Disbursed to Urgency Pool: \${receipt.receiptHash}\`);
-  }
+  const omegaUrl = process.env.OMEGA_APP_URL;
+  return fetch(\`\${omegaUrl}/api/fleet/tome-crafter/records\`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ manifest, payload })
+  });
 }`;
   }
 };
+

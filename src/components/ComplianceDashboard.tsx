@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { BadgeComplianceAuditor, AuditResult } from '../BadgeComplianceAuditor';
 import { HUMAN_PROTOCOL_SPECIFICATION } from '../HumanProtocolSpecification';
+import { signAndSyncDeliverable } from '../services/c2paService';
 import confetti from 'canvas-confetti';
 
 export interface RegisteredEcosystemApp {
@@ -421,19 +422,41 @@ export const ComplianceDashboard: React.FC = () => {
     setTimeout(() => setCopiedAppId(null), 2500);
   };
 
-  // Download Manifest JSON
-  const handleDownloadManifest = (app: RegisteredEcosystemApp) => {
+  // Download Manifest JSON (Web Crypto SHA-256 C2PA-JUMBF-v2.1 & Omega Sync)
+  const handleDownloadManifest = async (app: RegisteredEcosystemApp) => {
     const audit = auditResults[app.id];
     if (!audit) return;
 
-    const blob = new Blob([JSON.stringify(audit, null, 2)], { type: 'application/json' });
+    let attestedReport: Record<string, unknown> = { ...audit };
+    let syncMessage = `Downloaded compliance report: compliance-audit-${app.id}.json`;
+
+    try {
+      const syncResult = await signAndSyncDeliverable(audit, {
+        appId: app.id,
+        title: `${app.name} Compliance Audit Report`,
+        artifactType: 'compliance-audit',
+        corridor: 'Global Pool C ($FOOD / $MED)',
+      });
+      attestedReport = {
+        ...audit,
+        c2paAttestation: syncResult.manifest,
+        syncedToOmega: syncResult.syncedToOmega,
+      };
+      syncMessage = syncResult.syncedToOmega
+        ? `Signed C2PA-JUMBF-v2.1 report (${syncResult.manifest.sha256.slice(0, 12)}...) synced to Omega Hub & downloaded.`
+        : `Signed C2PA-JUMBF-v2.1 report (${syncResult.manifest.sha256.slice(0, 12)}...) downloaded.`;
+    } catch {
+      // Fallback to unsigned audit JSON if offline
+    }
+
+    const blob = new Blob([JSON.stringify(attestedReport, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = `compliance-audit-${app.id}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    showToast(`Downloaded compliance report: compliance-audit-${app.id}.json`);
+    showToast(syncMessage);
   };
 
   // Filtered Apps List

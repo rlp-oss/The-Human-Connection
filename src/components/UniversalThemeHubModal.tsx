@@ -32,7 +32,7 @@ export const UniversalThemeHubModal: React.FC<{ isOpen: boolean; onClose: () => 
   const { mode, setMode, accent, setAccent, glowIntensity, setGlowIntensity } = useTheme();
 
   const [ecosystemConfig, setEcosystemConfig] = useState<UniversalEcosystemBrandingConfig>({
-    initiativeVersion: '2.5.0',
+    initiativeVersion: '3.0.0-cleanroom',
     lastUpdated: new Date().toISOString(),
     globalTheme: {
       mode: mode,
@@ -52,6 +52,8 @@ export const UniversalThemeHubModal: React.FC<{ isOpen: boolean; onClose: () => 
       { id: 'tome-crafter', appName: 'Tome Crafter', customOverrideEnabled: false, badgeShape: 'embedded-pill', status: 'Synced' },
       { id: 'rlm-pro-studio', appName: 'RLM Pro Studio', customOverrideEnabled: false, badgeShape: 'hex-token', status: 'Synced' },
       { id: 'rl-easy-flow', appName: 'RL Easy Flow', customOverrideEnabled: false, badgeShape: 'card-provenance', status: 'Synced' },
+      { id: 'omega-app', appName: 'Omega App Hub', customOverrideEnabled: false, badgeShape: 'seal-circle', status: 'Synced' },
+      { id: 'rlmv-editor', appName: 'RLMV Music Video Editor', customOverrideEnabled: false, badgeShape: 'card-provenance', status: 'Synced' },
     ]
   });
 
@@ -106,11 +108,11 @@ export const UniversalThemeHubModal: React.FC<{ isOpen: boolean; onClose: () => 
   };
 
   const cssCdnTag = `<link rel="stylesheet" href="${window.location.origin}/api/ecosystem/theme.css" />`;
-  const pythonSdkBranding = `# In ForgeOS, Tome Crafter, or RLM Python apps:
-from human_initiative import InitiativeClient
+  const pythonSdkBranding = `# In ForgeOS, Tome Crafter, or RLM Cleanroom Apps (Zero client-side API key):
+import { resolveFleetApp, computeCovenantSplit } from './src/sdk/cleanroomSdk';
 
-client = InitiativeClient(api_key="...", app_source="ForgeOS")
-tokens = client.get_ecosystem_branding()
+const app = resolveFleetApp('forge-os');
+const split = computeCovenantSplit(49.00);
 # Returns: { "primaryColor": "${ecosystemConfig.globalTheme.primaryColor}", "mode": "${mode}", "covenantPct": 50 }`;
 
   const copyToClipboard = (text: string, type: string) => {

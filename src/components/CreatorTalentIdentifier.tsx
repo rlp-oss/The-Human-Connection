@@ -146,8 +146,8 @@ export const CreatorTalentIdentifier: React.FC<CreatorTalentIdentifierProps> = (
 🏆 Primary Superpower: ${report.superpowerTitle} (${report.primaryArchetype})
 ⭐ Rarity: ${report.rarityPercentile}
 🏛️ Assigned Flagship App: ${report.assignedFlagshipApps[0]?.appName || 'Tome Crafter'}
-⚖️ 40% Society Fund Covenant: Active & Verifiable
-https://humaninitiative.org/creator-identifier`;
+⚖️ 50% Society Fund Covenant: Active & Verifiable
+https://humanethicalai.ai.studio/creator-identifier`;
 
     navigator.clipboard.writeText(text);
     setCopiedToast('Diagnostic summary copied to clipboard!');
@@ -183,7 +183,7 @@ https://humaninitiative.org/creator-identifier`;
           </h1>
 
           <p className="text-sm md:text-base text-[#6A655C] leading-relaxed">
-            Answer 5 deep probing questions designed specifically to uncover the nuanced human sensory abilities, aesthetic judgments, and structural instincts that artificial intelligence cannot replicate. We will map your unique gift to high-yield 40% Society Fund royalty channels.
+            Answer 5 deep probing questions designed specifically to uncover the nuanced human sensory abilities, aesthetic judgments, and structural instincts that artificial intelligence cannot replicate. We will map your unique gift to high-yield 50% People&apos;s Covenant royalty channels.
           </p>
         </div>
       </div>
@@ -318,7 +318,7 @@ https://humaninitiative.org/creator-identifier`;
             Synthesizing Your Probing Diagnostic...
           </h2>
           <p className="text-xs text-[#6A655C] font-mono max-w-md mx-auto">
-            Cross-referencing your sensory instinct parameters against C2PA provenance datasets, zero-copyleft cleanroom standards, and 40% Society Fund dividend schedules...
+            Cross-referencing your sensory instinct parameters against C2PA provenance datasets, zero-copyleft cleanroom standards, and 50% People&apos;s Covenant dividend schedules...
           </p>
         </div>
       )}
@@ -470,7 +470,7 @@ https://humaninitiative.org/creator-identifier`;
                   className="px-5 py-2.5 rounded-xl bg-[#5A5A40] hover:bg-[#4A4A33] text-white font-semibold text-xs flex items-center gap-2 cursor-pointer shadow-xs active:scale-95 transition-all"
                 >
                   <Award className="w-4 h-4 text-white" />
-                  <span>Register Creator Profile & Claim 40% Share</span>
+                  <span>Register Creator Profile &amp; Claim 50% Share</span>
                   <ArrowRight className="w-3.5 h-3.5 text-white" />
                 </button>
               </div>

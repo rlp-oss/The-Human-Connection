@@ -58,7 +58,7 @@ export const FeedbackPortal: React.FC<FeedbackPortalProps> = ({ feedbackList, on
       showToast('Reply dispatched to tester!');
       onRefresh();
     } catch (err: any) {
-      alert('Failed to send reply: ' + err.message);
+      showToast('Failed to send reply: ' + err.message);
     }
   };
 
@@ -69,14 +69,14 @@ export const FeedbackPortal: React.FC<FeedbackPortalProps> = ({ feedbackList, on
       showToast(`Status updated to ${status}`);
       onRefresh();
     } catch (err: any) {
-      alert('Failed to update status: ' + err.message);
+      showToast('Failed to update status: ' + err.message);
     }
   };
 
   const handleCreateFeedback = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newSubject.trim() || !newContent.trim()) {
-      alert('Please fill out the subject and content.');
+      showToast('Please fill out the subject and content.');
       return;
     }
 
@@ -105,7 +105,7 @@ export const FeedbackPortal: React.FC<FeedbackPortalProps> = ({ feedbackList, on
       setNewContent('');
       onRefresh();
     } catch (err: any) {
-      alert('Failed to log feedback: ' + err.message);
+      showToast('Failed to log feedback: ' + err.message);
     }
   };
 
@@ -435,7 +435,7 @@ export const FeedbackPortal: React.FC<FeedbackPortalProps> = ({ feedbackList, on
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Issue with Stripe Sandbox micro-royalty routing"
+                  placeholder="e.g. Issue with Omega Direct-Rail /pay micro-royalty routing"
                   value={newSubject}
                   onChange={(e) => setNewSubject(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-[#F9F7F2] border border-[#DCD5CA] text-xs text-[#2D2926] placeholder-[#8C857B] focus:outline-none focus:border-[#5A5A40]"

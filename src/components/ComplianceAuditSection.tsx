@@ -297,11 +297,6 @@ export const ComplianceAuditSection: React.FC<ComplianceAuditSectionProps> = ({
   // Download / Print Audit Record as PDF Certificate
   const handleDownloadPDF = () => {
     setShowDownloadDropdown(false);
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      showToast('Popup blocker prevented opening print window. Please allow popups.');
-      return;
-    }
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -576,20 +571,57 @@ export const ComplianceAuditSection: React.FC<ComplianceAuditSectionProps> = ({
     <div>Page 1 of 1 • Official Compliance Archive Record (C2PA v2.1)</div>
   </div>
 
-  <script>
-    window.onload = function() {
-      setTimeout(function() {
-        window.print();
-      }, 400);
-    };
-  </script>
 </body>
 </html>
     `;
 
-    printWindow.document.open();
-    printWindow.document.write(htmlContent);
-    printWindow.document.close();
+    try {
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentDocument || iframe.contentWindow?.document;
+      if (doc && iframe.contentWindow) {
+        doc.open();
+        doc.write(htmlContent);
+        doc.close();
+        setTimeout(() => {
+          try {
+            iframe.contentWindow?.focus();
+            iframe.contentWindow?.print();
+          } finally {
+            setTimeout(() => {
+              if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            }, 1500);
+          }
+        }, 300);
+      } else {
+        const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `compliance-audit-${appId}.html`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch {
+      const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `compliance-audit-${appId}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
 
     confetti({
       particleCount: 50,
@@ -597,7 +629,7 @@ export const ComplianceAuditSection: React.FC<ComplianceAuditSectionProps> = ({
       origin: { y: 0.6 },
       colors: ['#5A5A40', '#3D6E50', '#D67D5C'],
     });
-    showToast('Opening print dialog to save Compliance Audit Record as PDF.');
+    showToast('Prepared Compliance Audit Record for PDF print / export.');
   };
 
   return (

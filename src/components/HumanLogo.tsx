@@ -28,90 +28,14 @@ export const EmeraldHumanNetworkLogoIcon: React.FC<{ size?: number; className?: 
   className = '' 
 }) => {
   return (
-    <svg 
-      width={size} 
-      height={size} 
-      viewBox="0 0 120 120" 
-      fill="none" 
-      xmlns="http://www.w3.org/2000/svg"
-      className={`relative z-10 transition-transform duration-300 ${className}`}
-    >
-      <defs>
-        <radialGradient id="cyberGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#059669" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#064E3B" stopOpacity="0.95" />
-        </radialGradient>
-        <linearGradient id="neonEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#34D399" />
-          <stop offset="50%" stopColor="#10B981" />
-          <stop offset="100%" stopColor="#059669" />
-        </linearGradient>
-        <linearGradient id="cyanMint" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#67E8F9" />
-          <stop offset="100%" stopColor="#34D399" />
-        </linearGradient>
-      </defs>
-
-      {/* Dark Cyber Canvas Base */}
-      <rect x="6" y="6" width="108" height="108" rx="24" fill="url(#cyberGlow)" stroke="#10B981" strokeWidth="2.5" />
-
-      {/* Outer Hexagonal Geometric Constellation */}
-      <polygon 
-        points="60,18 96,38 96,82 60,102 24,82 24,38" 
-        stroke="url(#neonEmerald)" 
-        strokeWidth="1.8" 
-        strokeDasharray="4 3" 
-        opacity="0.85" 
-      />
-
-      {/* Outer Constellation Node Points */}
-      <circle cx="60" cy="18" r="3.5" fill="#34D399" />
-      <circle cx="96" cy="38" r="3.5" fill="#34D399" />
-      <circle cx="96" cy="82" r="3.5" fill="#34D399" />
-      <circle cx="60" cy="102" r="3.5" fill="#34D399" />
-      <circle cx="24" cy="82" r="3.5" fill="#34D399" />
-      <circle cx="24" cy="38" r="3.5" fill="#34D399" />
-
-      {/* Radiating Neural Connections to Center */}
-      <line x1="60" y1="18" x2="60" y2="35" stroke="#34D399" strokeWidth="1.5" />
-      <line x1="96" y1="38" x2="78" y2="48" stroke="#34D399" strokeWidth="1.5" />
-      <line x1="96" y1="82" x2="78" y2="72" stroke="#34D399" strokeWidth="1.5" />
-      <line x1="60" y1="102" x2="60" y2="85" stroke="#34D399" strokeWidth="1.5" />
-      <line x1="24" y1="82" x2="42" y2="72" stroke="#34D399" strokeWidth="1.5" />
-      <line x1="24" y1="38" x2="42" y2="48" stroke="#34D399" strokeWidth="1.5" />
-
-      {/* Human Silhouette & Fingerprint Provenance Core */}
-      {/* Head */}
-      <circle cx="60" cy="42" r="9" stroke="url(#cyanMint)" strokeWidth="2.4" fill="#047857" fillOpacity="0.4" />
-      
-      {/* Shoulders & Heart Arcs */}
-      <path 
-        d="M40 76 C40 60 48 54 60 54 C72 54 80 60 80 76" 
-        stroke="url(#cyanMint)" 
-        strokeWidth="2.4" 
-        strokeLinecap="round" 
-        fill="none" 
-      />
-
-      {/* Fingerprint Provenance Whorls in Center */}
-      <path d="M52 64 C52 59 55 57 60 57 C65 57 68 59 68 64" stroke="#A7F3D0" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M47 70 C47 62 52 60 60 60 C68 60 73 62 73 70" stroke="#34D399" strokeWidth="1.6" strokeLinecap="round" />
-      <circle cx="60" cy="65" r="2" fill="#67E8F9" />
-
-      {/* Subtext Accent: HUMAN */}
-      <text 
-        x="60" 
-        y="96" 
-        textAnchor="middle" 
-        fill="#A7F3D0" 
-        fontSize="11" 
-        fontWeight="800" 
-        fontFamily="monospace" 
-        letterSpacing="2.5"
-      >
-        HUMAN
-      </text>
-    </svg>
+    <img
+      src="/human-connection-logo.svg"
+      alt="The H.U.M.A.N. Initiative Official Logo"
+      width={size}
+      height={size}
+      style={{ width: size, height: size }}
+      className={`relative z-10 rounded-xl object-cover shadow-xs transition-transform duration-300 ${className}`}
+    />
   );
 };
 
@@ -468,13 +392,13 @@ export const HumanLogo: React.FC<LogoProps> = ({
   const getSubtitle = () => {
     switch (variant) {
       case 'tome-crafter':
-        return 'Books & Literature • 40% Fund';
+        return 'Books & Literature • 50% Covenant';
       case 'rlm-pro-studio':
-        return 'Music & Audio Stems • 40% Fund';
+        return 'Music & Audio Stems • 50% Covenant';
       case 'forgeos':
-        return 'Cleanroom Code AST • 40% Fund';
+        return 'Cleanroom Code AST • 50% Covenant';
       case 'rl-easy-flow':
-        return 'Video Frame Provenance • 40% Fund';
+        return 'Video Frame Provenance • 50% Covenant';
       case 'emerald-cyber':
       case 'human-master':
       default:

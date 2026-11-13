@@ -44,6 +44,11 @@ import {
   INITIAL_STUDIO_CREATIONS
 } from './initialData';
 import { StudioCreationWork } from '../types';
+import {
+  computeCovenantSplit,
+  createSignedOmegaCheckout,
+  DEFAULT_CORRIDOR,
+} from '../sdk/cleanroomSdk';
 
 // Storage keys for local persistence
 const STORAGE_KEYS = {
@@ -140,13 +145,25 @@ export const TesterService = {
     testers.unshift(created);
     saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-    // Sync to Firestore
+    // Sync to Firestore & Omega Hub Contributors collection
     try {
       if (db) {
         await setDoc(doc(db, 'testers', id), created);
       }
     } catch (err) {
       console.warn('Firestore save tester sync error:', err);
+    }
+
+    try {
+      await apiClient.post('/api/omega/contributors/register', {
+        name: created.name,
+        email: created.email,
+        github_handle: created.github_handle,
+        role: created.role,
+        app_access_list: created.app_access_list,
+      });
+    } catch (err) {
+      console.warn('Omega contributor registration sync deferred:', err);
     }
 
     return created;
@@ -188,76 +205,82 @@ export const TesterService = {
   },
 
   /**
-   * Sensitive Operation: Grant Access
-   * Calls server endpoint to dispatch access webhook & issue verified tokens.
+   * Generates a server-signed Omega Direct-Rail /pay checkout URL for the target app/plan
+   * and updates contributor access state locally.
    */
-  async grantAccess(testerId: string, appName: AppName, accessTier?: string): Promise<{ success: boolean; message: string; licenseKey: string }> {
-    try {
-      const res = await apiClient.post('/api/stripe/grant-access', {
-        testerId,
-        appName,
-        accessTier,
-      });
+  async initiateOmegaCheckout(
+    testerId: string,
+    appName: AppName,
+    plan: string = 'Pro Sovereign',
+    amountCents: number = 4900
+  ): Promise<{ success: boolean; url: string; sessionId: string; message: string }> {
+    const testers = loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
+    const tester = testers.find(t => t.id === testerId);
+    const appSlugMap: Record<AppName, string> = {
+      'Tome Crafter': 'tome-crafter',
+      'RLM Pro Studio': 'rlm-pro-studio',
+      'ForgeOS App Builder': 'forge-os',
+      'RL Easy Flow': 'rl-easy-flow',
+    };
 
-      // Update tester license record locally
-      const testers = loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
-      const tester = testers.find(t => t.id === testerId);
-      if (tester) {
-        if (!tester.app_access_list.includes(appName)) {
-          tester.app_access_list.push(appName);
-        }
-        if (!tester.license_keys) tester.license_keys = {};
-        tester.license_keys[appName] = res.data.licenseKey;
-        tester.current_subscription_status = 'Stripe Connect Active';
-        tester.last_active = 'Just updated access';
-        saveToStorage(STORAGE_KEYS.TESTERS, testers);
+    const signed = await createSignedOmegaCheckout({
+      app: appSlugMap[appName] || 'human-hub',
+      plan,
+      target: appName,
+      amountCents,
+      email: tester?.email || '',
+      userId: testerId,
+      corridor: DEFAULT_CORRIDOR,
+    });
 
-        if (db) {
-          await updateDoc(doc(db, 'testers', testerId), {
-            app_access_list: tester.app_access_list,
-            license_keys: tester.license_keys,
-            current_subscription_status: tester.current_subscription_status,
-            last_active: tester.last_active,
-          }).catch(() => {});
-        }
+    if (tester) {
+      if (!tester.app_access_list.includes(appName)) {
+        tester.app_access_list.push(appName);
       }
+      if (!tester.license_keys) tester.license_keys = {};
+      tester.license_keys[appName] = signed.sessionId;
+      tester.current_subscription_status = 'Omega Direct-Rail';
+      tester.last_active = 'Checkout initiated via Omega /pay';
+      saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-      return res.data;
-    } catch {
-      // Offline / fallback response
-      const fallbackKey = `HUMAN-${appName.substring(0, 3).toUpperCase()}-TEST-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-      return {
-        success: true,
-        message: `Access granted for ${appName}. Offline simulation active.`,
-        licenseKey: fallbackKey,
-      };
+      if (db) {
+        await updateDoc(doc(db, 'testers', testerId), {
+          app_access_list: tester.app_access_list,
+          license_keys: tester.license_keys,
+          current_subscription_status: tester.current_subscription_status,
+          last_active: tester.last_active,
+        }).catch(() => {});
+      }
     }
+
+    return {
+      success: true,
+      url: signed.url,
+      sessionId: signed.sessionId,
+      message: `Signed Omega Direct-Rail /pay checkout generated for ${appName}.`,
+    };
   },
 
   /**
-   * Sensitive Operation: Reset Stripe Sandbox
-   * Calls server endpoint to clear test payment intent tokens & generate fresh sandbox IDs.
+   * Routes contributor session resets to ${OMEGA_APP_URL}/api/omega/gateway/reset
    */
-  async resetStripeSandbox(testerId: string, email: string): Promise<{ success: boolean; message: string; account: any }> {
+  async resetContributorSession(testerId: string, email: string): Promise<{ success: boolean; message: string; syncedToOmega?: boolean }> {
     try {
-      const res = await apiClient.post('/api/stripe/sandbox-reset', {
-        testerId,
+      const res = await apiClient.post('/api/omega/gateway/reset', {
+        id: testerId,
         email,
       });
 
-      // Update tester stripe account status
       const testers = loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
       const tester = testers.find(t => t.id === testerId);
       if (tester) {
-        tester.current_subscription_status = 'Stripe Sandbox';
-        tester.stripe_account_id = res.data.account.stripeSandboxAccountId;
-        tester.last_active = 'Sandbox reset just now';
+        tester.current_subscription_status = 'Omega Direct-Rail';
+        tester.last_active = 'Session reset via Omega';
         saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
         if (db) {
           await updateDoc(doc(db, 'testers', testerId), {
-            current_subscription_status: 'Stripe Sandbox',
-            stripe_account_id: res.data.account.stripeSandboxAccountId,
+            current_subscription_status: 'Omega Direct-Rail',
             last_active: tester.last_active,
           }).catch(() => {});
         }
@@ -265,11 +288,10 @@ export const TesterService = {
 
       return res.data;
     } catch {
-      const newAccountId = `acct_test_${Math.random().toString(36).substring(2, 10)}`;
       return {
         success: true,
-        message: `Stripe Sandbox tokens refreshed for ${email}.`,
-        account: { stripeSandboxAccountId: newAccountId, status: 'Stripe Sandbox' },
+        message: `Omega contributor session reset queued for ${email}.`,
+        syncedToOmega: false,
       };
     }
   },
@@ -594,20 +616,20 @@ export const SocietyFundService = {
     if (index !== -1) {
       apps[index].subscribers_count = Math.max(0, newCount);
       apps[index].gross_monthly_mrr = apps[index].subscribers_count * apps[index].plan_price_monthly;
-      apps[index].society_fund_40pct_contribution = apps[index].gross_monthly_mrr * 0.40;
+      apps[index].society_fund_40pct_contribution = computeCovenantSplit(apps[index].gross_monthly_mrr).societyFundUsd;
     }
 
-    // Recompute global metrics
+    // Recompute global metrics via exact 50% People's Covenant split
     const totalSubs = apps.reduce((sum, a) => sum + a.subscribers_count, 0);
     const totalGross = apps.reduce((sum, a) => sum + a.gross_monthly_mrr, 0);
-    const total40pct = totalGross * 0.40;
+    const totalSplit = computeCovenantSplit(totalGross);
 
     metrics.total_active_subscribers = totalSubs;
     metrics.total_subscription_revenue_usd = totalGross;
-    metrics.total_society_fund_usd = total40pct;
-    metrics.allocated_registered_pool_usd = Math.max(0, total40pct - metrics.unallocated_holding_escrow_usd);
+    metrics.total_society_fund_usd = totalSplit.societyFundUsd;
+    metrics.allocated_registered_pool_usd = Math.max(0, totalSplit.societyFundUsd - metrics.unallocated_holding_escrow_usd);
     metrics.average_monthly_sub_price = totalSubs > 0 ? (totalGross / totalSubs) : 0;
-    metrics.per_subscriber_royalty_yield = metrics.average_monthly_sub_price * 0.40;
+    metrics.per_subscriber_royalty_yield = computeCovenantSplit(metrics.average_monthly_sub_price).societyFundUsd;
     metrics.estimated_payout_per_registered_creator = metrics.total_registered_creators > 0 
       ? (metrics.allocated_registered_pool_usd / metrics.total_registered_creators) 
       : 0;
@@ -633,28 +655,28 @@ export const SocietyFundService = {
 
     const app = apps.find(a => a.app_id === appId) || apps[0];
     const price = customPrice || app.plan_price_monthly;
-    const cut40 = price * 0.40;
+    const subSplit = computeCovenantSplit(price);
 
     app.subscribers_count += 1;
     app.gross_monthly_mrr += price;
-    app.society_fund_40pct_contribution += cut40;
+    app.society_fund_40pct_contribution += subSplit.societyFundUsd;
 
     const totalSubs = apps.reduce((sum, a) => sum + a.subscribers_count, 0);
     const totalGross = apps.reduce((sum, a) => sum + a.gross_monthly_mrr, 0);
-    const total40pct = totalGross * 0.40;
+    const totalSplit = computeCovenantSplit(totalGross);
 
     metrics.total_active_subscribers = totalSubs;
     metrics.total_subscription_revenue_usd = totalGross;
-    metrics.total_society_fund_usd = total40pct;
-    metrics.allocated_registered_pool_usd = Math.max(0, total40pct - metrics.unallocated_holding_escrow_usd);
+    metrics.total_society_fund_usd = totalSplit.societyFundUsd;
+    metrics.allocated_registered_pool_usd = Math.max(0, totalSplit.societyFundUsd - metrics.unallocated_holding_escrow_usd);
     metrics.average_monthly_sub_price = totalSubs > 0 ? (totalGross / totalSubs) : 0;
-    metrics.per_subscriber_royalty_yield = metrics.average_monthly_sub_price * 0.40;
+    metrics.per_subscriber_royalty_yield = computeCovenantSplit(metrics.average_monthly_sub_price).societyFundUsd;
     metrics.estimated_payout_per_registered_creator = metrics.total_registered_creators > 0 
       ? (metrics.allocated_registered_pool_usd / metrics.total_registered_creators) 
       : 0;
 
-    summary.total_streamed_usd += cut40;
-    summary.society_fund_balance_usd = total40pct;
+    summary.total_streamed_usd += subSplit.societyFundUsd;
+    summary.society_fund_balance_usd = totalSplit.societyFundUsd;
     summary.total_active_subscribers = totalSubs;
 
     saveToStorage(STORAGE_KEYS.APP_SUBSCRIPTIONS, apps);
@@ -665,9 +687,9 @@ export const SocietyFundService = {
       success: true,
       appName: app.app_name,
       subscriptionPrice: price,
-      societyFundCut: cut40,
+      societyFundCut: subSplit.societyFundUsd,
       newTotalSubscribers: totalSubs,
-      newSocietyFundPool: total40pct,
+      newSocietyFundPool: totalSplit.societyFundUsd,
       newPerCreatorPayout: metrics.estimated_payout_per_registered_creator,
     };
   },
@@ -812,7 +834,7 @@ export const CreatorAccountService = {
       stripe_status: 'Connected',
       registered_works_count: data.workTitle ? 1 : 0,
       total_earned_usd: 0,
-      available_balance_usd: 424.48, // automatic first allocation from current 40% pool
+      available_balance_usd: 530.61, // automatic allocation from 50% People's Covenant pool
       c2pa_did: `did:c2pa:${data.email.replace(/[^a-zA-Z0-9]/g, '.')}.${Date.now().toString(36)}`,
       joined_at: new Date().toISOString(),
       bio: data.bio || 'Verified human rights holder with C2PA Content Credentials watermark.',

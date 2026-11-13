@@ -1029,7 +1029,7 @@ export const GlobalFundMacroAndBlockchainArchitecture: React.FC<GlobalFundMacroP
       id: 'fa-06',
       phase: 'Phase 3: Tokenomics & Cryptographic Modeling',
       title: 'Implement Smart Contract Restitution Vaults & Automated Splitters',
-      description: 'Develop the immutable Solidity / Rust contracts enforcing the 40% creator royalty, 30% universal human monthly living dividend, 15% compute commons, and Stripe Sandbox/Live settlement hooks.',
+      description: 'Develop the immutable Solidity / Rust contracts enforcing the creator restitution covenant, universal human monthly living dividend, compute commons, and Omega Direct-Rail /pay settlement hooks.',
       priority: 'High',
       estimatedDuration: '4 Weeks',
       dependencies: ['Tokenomics Model'],

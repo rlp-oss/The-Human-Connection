@@ -27,7 +27,7 @@ export interface EcosystemAppEntry {
   };
 }
 
-export const ECOSYSTEM_STORAGE_KEY = 'human_app_integrations_v5';
+export const ECOSYSTEM_STORAGE_KEY = 'human_app_integrations_v6';
 export const ECOSYSTEM_UPDATED_EVENT = 'human-ecosystem-apps-updated';
 
 export const DEFAULT_ECOSYSTEM_APPS: EcosystemAppEntry[] = [
@@ -64,7 +64,7 @@ export const DEFAULT_ECOSYSTEM_APPS: EcosystemAppEntry[] = [
     name: 'RLM Pro Studio',
     appId: 'rlm-pro-studio',
     vertical: 'Hybrid Audio Production Suite',
-    appUrl: 'https://remix-lyria-studio-5954.ai.studio',
+    appUrl: 'https://rlm-pro-studio.ai.studio',
     iconType: 'music',
     healthScore: 100,
     status: 'Optimal',
@@ -147,15 +147,43 @@ export const DEFAULT_ECOSYSTEM_APPS: EcosystemAppEntry[] = [
     id: 'app_omega_05',
     name: 'Omega App',
     appId: 'omega-app',
-    vertical: 'Independent Sister Project (Set live URL once launched)',
-    appUrl: '',
+    vertical: 'Sovereign Direct-Rail /pay & Omega Protocol v3.0.0-cleanroom Hub',
+    appUrl: 'https://human-initiative-omega-799079571356.us-west1.run.app',
     iconType: 'code',
     healthScore: 100,
-    status: 'Unlinked',
-    activationState: 'PENDING',
+    status: 'Optimal',
+    activationState: 'ACTIVE',
     c2paHash: '0x7c44ab109ee201ff882100a3c41908ee11004a2b89c01',
     ftAuditId: 'FT-ETHIC-OMEGA-2026',
     storyIpId: '0x77om...ega05',
+    royaltyBalance: 0.00,
+    lastAudited: '2026-11-13 08:30 UTC',
+    checkpoints: {
+      cleanroomCertified: true,
+      c2paJumbfBound: true,
+      royaltyFunded: true,
+      personhoodVerified: true,
+      regulatoryCompliant: true,
+    },
+    metrics: {
+      totalInferences: 'Live Sovereign Direct-Rail Clearinghouse',
+      royaltiesStreamedUsd: 0.00,
+      creatorsAttributed: 180,
+    },
+  },
+  {
+    id: 'app_rlmv_06',
+    name: 'RLMV Music Video Editor',
+    appId: 'rlmv-editor',
+    vertical: 'AI-Assisted Music Video Timeline & C2PA Studio',
+    appUrl: '',
+    iconType: 'video',
+    healthScore: 100,
+    status: 'Unlinked',
+    activationState: 'PENDING',
+    c2paHash: '0x66cd9012fe44110abc882104519dc02b7718ea320114',
+    ftAuditId: 'FT-ETHIC-RLMV-VIDEO-2026',
+    storyIpId: '0x88mv...vid06',
     royaltyBalance: 0.00,
     lastAudited: 'Pending URL Binding',
     checkpoints: {

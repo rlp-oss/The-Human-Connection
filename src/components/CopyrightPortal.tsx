@@ -47,7 +47,7 @@ export const CopyrightPortal: React.FC<CopyrightPortalProps> = ({ claims, onRefr
 
   const handleEvaluateClaimWithAI = async () => {
     if (!title.trim() || !creatorName.trim()) {
-      alert('Please fill in the title and creator name before auditing.');
+      showToast('Please fill in the title and creator name before auditing.');
       return;
     }
     setIsEvaluatingWithGemini(true);
@@ -115,7 +115,7 @@ export const CopyrightPortal: React.FC<CopyrightPortalProps> = ({ claims, onRefr
       setEvidenceDescription('');
       setGeminiResult(null);
     } catch (err: any) {
-      alert('Failed to register claim: ' + err.message);
+      showToast('Failed to register claim: ' + err.message);
     }
   };
 

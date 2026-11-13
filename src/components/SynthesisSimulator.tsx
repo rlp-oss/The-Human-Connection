@@ -190,7 +190,7 @@ export const SynthesisSimulator: React.FC<SynthesisSimulatorProps> = ({
       console.error('Synthesis error:', err);
       // Fallback
       setCurrentResult({
-        generatedSnippet: `// Synthesized with The H.U.M.A.N. Initiative Guardrails (Powering Ethical AI apps, And Paying the People)\nimport { streamSubscriptionRoyalty } from '@human-network/initiative';\n\nexport async function handleArtisanPatronage() {\n  return await streamSubscriptionRoyalty({\n    beneficiary: 'codygermain032@gmail.com',\n    amountCents: 4.8,\n    covenantShare: '40%'\n  });\n}`,
+        generatedSnippet: `// Synthesized with The H.U.M.A.N. Initiative Guardrails (Powering Ethical AI apps, And Paying the People)\nimport { streamSubscriptionRoyalty } from '@human-network/initiative';\n\nexport async function handleArtisanPatronage() {\n  return await streamSubscriptionRoyalty({\n    beneficiary: 'codygermain032@gmail.com',\n    amountCents: 4.8,\n    covenantShare: '50%'\n  });\n}`,
         attributedCreators: [
           { name: 'Cody Germain', role: 'The H.U.M.A.N. Initiative Lead', package: '@human/kernel', microRoyaltyCents: 4.8 },
           { name: 'Sarah Chen', role: 'OSS Maintainer', package: '@fast-router', microRoyaltyCents: 2.2 },
@@ -292,7 +292,7 @@ export const SynthesisSimulator: React.FC<SynthesisSimulatorProps> = ({
                 className="w-full px-3 py-2 rounded-lg bg-[#F9F7F2] border border-[#DCD5CA] text-xs text-[#2D2926] focus:outline-none focus:border-[#5A5A40]"
               >
                 <option value="Literature / Documentation">Literature & Book Publishing (Tome Crafter - tomecrafter-ai-book-studio.ai.studio)</option>
-                <option value="Acoustic Music Stems">Acoustic Music & Stems (RLM Pro Studio - remix-lyria-studio-5954.ai.studio)</option>
+                <option value="Acoustic Music Stems">Acoustic Music &amp; Stems (RLM Pro Studio - rlm-pro-studio.ai.studio)</option>
                 <option value="TypeScript React Component">Cleanroom Code & AST (ForgeOS App Builders & Tester)</option>
                 <option value="AI Video Scenes">AI Video Generation (RL Easy Flow - rl-easy-flow.ai.studio)</option>
                 <option value="Vector UI Glyphs">Vector UI Glyphs (Artisan UX)</option>

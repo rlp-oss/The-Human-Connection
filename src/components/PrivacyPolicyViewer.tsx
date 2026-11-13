@@ -72,11 +72,13 @@ Non-Profit Authority: H.U.M.A.N. Protocol Foundation
 Standards: EU AI Act (Art. 50/53), Fairly Trained (FT-2026), C2PA JUMBF v2.1, GDPR & CCPA
 
 ## 1. Scope & Multi-App Architecture
-The H.U.M.A.N. Non-Profit Foundation governs the ethical verification and micro-royalty routing across 4 flagship applications:
+The H.U.M.A.N. Non-Profit Foundation governs the ethical verification and micro-royalty routing across 5 connected flagship apps plus upcoming sister suites:
 - Tome Crafter (https://tomecrafter-ai-book-studio.ai.studio) - FT-ETHIC-TOMECRAFTER-2026
-- RLM Pro Studio (https://remix-lyria-studio-5954.ai.studio) - FT-ETHIC-RLM-AUDIO-2026
+- RLM Pro Studio (https://rlm-pro-studio.ai.studio) - FT-ETHIC-RLM-AUDIO-2026
 - ForgeOS App Builders & Tester (https://forgeos-app-builder-tester-console-416188261320.us-east1.run.app) - FT-ETHIC-FORGEOS-APPBUILDER-2026
 - RL Easy Flow (https://rl-easy-flow.ai.studio) - FT-ETHIC-RL-EASY-FLOW-2026
+- Omega App Hub (https://human-initiative-omega-799079571356.us-west1.run.app) - FT-ETHIC-OMEGA-CORE-2026
+- RLMV Music Video Editor (rlmv-editor) - FT-ETHIC-RLMV-VIDEO-2026
 
 ## 2. Zero-Ingestion Cleanroom Guarantee
 User-authored book drafts, audio stems, codebases, and video prompts are NEVER scraped or utilized to train foundation models without explicit consent.
@@ -115,7 +117,7 @@ Contact: legal@human-protocol.org / codygermain032@gmail.com`;
     },
     {
       name: 'RLM Pro Studio',
-      url: 'https://remix-lyria-studio-5954.ai.studio',
+      url: 'https://rlm-pro-studio.ai.studio',
       vertical: 'Hybrid Audio Production Suite & Stem DAW',
       auditId: 'FT-ETHIC-RLM-AUDIO-2026',
       icon: <Music className="w-4 h-4 text-[#5A5A40]" />,

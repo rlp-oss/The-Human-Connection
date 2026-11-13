@@ -69,8 +69,7 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
   const [filterType, setFilterType] = useState<'all' | 'images' | 'audio' | 'backups'>(initialFilter);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [isBackingUp, setIsBackingUp] = useState(false);
-  const [recentSqlBackups, setRecentSqlBackups] = useState<any[]>([]);
-  const [isSyncingSql, setIsSyncingSql] = useState(false);
+  const [recentBackups, setRecentBackups] = useState<any[]>([]);
   const [loadingAudioFileId, setLoadingAudioFileId] = useState<string | null>(null);
 
   // Destructive Delete Confirmation State (Strict Workspace Policy)
@@ -98,19 +97,19 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
       }
     });
 
-    fetchSqlBackups();
+    fetchBackupHistory();
 
     return () => unsubscribe();
   }, []);
 
-  const fetchSqlBackups = async () => {
+  const fetchBackupHistory = async () => {
     try {
       const res = await axios.get('/api/drive/backups');
       if (res.data?.backups) {
-        setRecentSqlBackups(res.data.backups);
+        setRecentBackups(res.data.backups);
       }
     } catch (e) {
-      console.warn('Could not fetch SQL backup history');
+      console.warn('Could not fetch backup history');
     }
   };
 
@@ -179,7 +178,7 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
     setStatusMessage({ type: 'info', text: 'Signed out of Google Drive.' });
   };
 
-  // Perform full export & backup to Google Drive + Cloud SQL log
+  // Perform full export & backup to Google Drive + Local Registry log
   const handleFullDriveBackup = async () => {
     if (!accessToken || !currentUser) {
       setStatusMessage({ type: 'error', text: 'Please connect your Google Account first.' });
@@ -187,23 +186,16 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
     }
 
     setIsBackingUp(true);
-    setStatusMessage({ type: 'info', text: 'Preparing ecosystem snapshot and Cloud SQL synchronization...' });
+    setStatusMessage({ type: 'info', text: 'Preparing ecosystem snapshot for Google Drive...' });
 
     try {
-      // 1. Sync records to Cloud SQL PostgreSQL first
-      setIsSyncingSql(true);
-      await axios.post('/api/sql/sync-testers', { items: testers }).catch(() => {});
-      await axios.post('/api/sql/sync-claims', { items: claims }).catch(() => {});
-      await axios.post('/api/sql/sync-feedback', { items: feedback }).catch(() => {});
-      setIsSyncingSql(false);
-
-      // 2. Locate or create HUMAN-Ethical-AI-Console folder in Google Drive
+      // 1. Locate or create HUMAN-Ethical-AI-Console folder in Google Drive
       const folderId = await getOrCreateFolder(accessToken, 'HUMAN-Ethical-AI-Console');
 
-      // 3. Compile comprehensive JSON snapshot payload
+      // 2. Compile comprehensive JSON snapshot payload
       const timestamp = new Date().toISOString();
       const backupData = {
-        title: 'The H.U.M.A.N. Initiative Ecosystem & Cloud SQL Snapshot',
+        title: 'The H.U.M.A.N. Initiative Ecosystem Snapshot',
         tagline: 'Powering Ethical AI apps, And Paying the People',
         exportedAt: timestamp,
         userEmail: currentUser.email,
@@ -217,23 +209,23 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
         claims,
         feedback,
         broadcasts,
-        cloudSqlDatabase: 'ai-studio-3825022c (PostgreSQL)',
-        restitutionPool: '50% Net Subscription Pool',
+        protocolVersion: '3.0.0-cleanroom',
+        restitutionPool: "50% People's Covenant (35% Pool A / 7.5% Pool B / 7.5% Pool C)",
       };
 
       const filename = `HUMAN_Ecosystem_Backup_${timestamp.replace(/[:.]/g, '-')}.json`;
       const fileContent = JSON.stringify(backupData, null, 2);
 
-      // 4. Upload to Google Drive
+      // 3. Upload to Google Drive
       const uploadedFile = await uploadFileToDrive(accessToken, {
         name: filename,
         mimeType: 'application/json',
         content: fileContent,
         folderId,
-        description: `Automated ecosystem backup with ${testers.length} testers and ${claims.length} verified creator claims.`,
+        description: `Automated ecosystem backup with ${testers.length} contributors and ${claims.length} verified creator claims.`,
       });
 
-      // 5. Record backup metadata in Cloud SQL
+      // 4. Record backup metadata in local registry
       await axios.post('/api/drive/backups', {
         userUid: currentUser.uid,
         userEmail: currentUser.email,
@@ -246,11 +238,11 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
 
       setStatusMessage({
         type: 'success',
-        text: `Backup successfully created in Google Drive folder 'HUMAN-Ethical-AI-Console' (${filename}) and recorded in Cloud SQL.`,
+        text: `Backup successfully created in Google Drive folder 'HUMAN-Ethical-AI-Console' (${filename}) and logged to local archive.`,
       });
 
       fetchFiles();
-      fetchSqlBackups();
+      fetchBackupHistory();
     } catch (err: any) {
       console.error('Backup failed:', err);
       setStatusMessage({
@@ -333,13 +325,13 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
             </div>
             <div>
               <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-                Google Drive & Cloud SQL Hub
+                Google Drive &amp; Ecosystem Archive
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-medium">
                   Workspace Connected
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Browse Google Drive assets, import logos, and store immutable Cloud SQL database snapshots.
+                Browse Google Drive assets, import logos or podcast stems, and store immutable ecosystem snapshots.
               </p>
             </div>
           </div>
@@ -460,15 +452,15 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
             </div>
           </div>
 
-          {/* Cloud SQL Synchronization Indicator */}
+          {/* Registry Synchronization Indicator */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="p-3.5 rounded-xl bg-slate-800/40 border border-slate-700/60 flex items-center gap-3">
               <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
                 <Database className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[11px] text-slate-400 font-medium">Cloud SQL PostgreSQL</div>
-                <div className="text-xs font-semibold text-slate-200">ai-studio-3825022c (us-west1)</div>
+                <div className="text-[11px] text-slate-400 font-medium">Cleanroom Registry</div>
+                <div className="text-xs font-semibold text-slate-200">Omega v3.0.0-cleanroom</div>
               </div>
             </div>
 
@@ -477,9 +469,9 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
                 <Cloud className="w-4 h-4" />
               </div>
               <div>
-                <div className="text-[11px] text-slate-400 font-medium">PostgreSQL State Sync</div>
+                <div className="text-[11px] text-slate-400 font-medium">Snapshot Coverage</div>
                 <div className="text-xs font-semibold text-emerald-400">
-                  {testers.length} Testers • {claims.length} Claims
+                  {testers.length} Contributors • {claims.length} Claims
                 </div>
               </div>
             </div>
@@ -680,12 +672,12 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
             )}
           </div>
 
-          {/* Recent Backups Log Table (Cloud SQL Records) */}
-          {recentSqlBackups.length > 0 && (
+          {/* Recent Backups Log Table */}
+          {recentBackups.length > 0 && (
             <div className="space-y-2 pt-2">
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                 <Database className="w-3.5 h-3.5 text-blue-400" />
-                Cloud SQL Backup Registry
+                Ecosystem Backup Registry
               </h3>
               <div className="border border-slate-800 rounded-xl overflow-hidden text-xs">
                 <table className="w-full text-left border-collapse">
@@ -698,7 +690,7 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                    {recentSqlBackups.slice(0, 5).map((b) => (
+                    {recentBackups.slice(0, 5).map((b) => (
                       <tr key={b.id} className="hover:bg-slate-800/30">
                         <td className="p-2.5 font-mono text-[11px] text-slate-200 truncate max-w-xs">{b.fileName}</td>
                         <td className="p-2.5 capitalize text-slate-400">{b.backupType.replace('_', ' ')}</td>

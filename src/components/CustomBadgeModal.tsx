@@ -205,7 +205,7 @@ export function TrustFooter() {
       verificationUrl="${config.verificationUrl}"
       c2paHash="${config.c2paHash}"
       ${config.logoDataUrl ? `customLogoUrl="${config.logoDataUrl.substring(0, 48)}..."` : `logoPreset="${config.logoVariant}"`}
-      onVerifyClick={() => window.open('${config.verificationUrl}', '_blank')}
+      onVerifyClick={() => window.location.assign('${config.verificationUrl}')}
     />
   );
 }`;

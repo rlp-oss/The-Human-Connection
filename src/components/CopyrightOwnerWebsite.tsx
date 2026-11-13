@@ -303,8 +303,8 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
       await DirectMessageService.createNewThread({
         creatorName: signupName,
         creatorEmail: signupEmail,
-        subject: 'Welcome to The H.U.M.A.N. Initiative 40% Subscription Royalty Covenant!',
-        messageText: `Welcome ${signupName}! Your account has been provisioned with C2PA DID ${newCreator.c2pa_did} and linked to Stripe Connect (${newCreator.stripe_account_id}). Exactly 40% of all ecosystem subscriptions are being tallied for your works.`,
+        subject: "Welcome to The H.U.M.A.N. Initiative 50% People's Covenant!",
+        messageText: `Welcome ${signupName}! Your account has been provisioned with C2PA DID ${newCreator.c2pa_did} and linked to payout rail (${newCreator.stripe_account_id}). Exactly 50% of all ecosystem subscriptions route to the Society Covenant Fund (35% Pool A Creators, 7.5% Pool B Stewards, 7.5% Pool C Humanitarian Aid).`,
         category: 'Activation',
         workReference: signupWorkTitle || 'Universal Human Catalog',
       });
@@ -320,11 +320,12 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
         colors: ['#5A5A40', '#3D6E50', '#D67D5C'],
       });
 
-      setToastMsg(`🎉 Welcome, ${newCreator.name}! Your Copyright Account is active with 40% subscription royalty auto-routing.`);
+      setToastMsg(`Welcome, ${newCreator.name}! Your Copyright Account is active with 50% People's Covenant royalty auto-routing.`);
       navigateTo('signin');
       setTimeout(() => setToastMsg(null), 7000);
     } catch (err: any) {
-      alert('Sign up failed: ' + err.message);
+      setToastMsg('Sign up failed: ' + err.message);
+      setTimeout(() => setToastMsg(null), 5000);
     } finally {
       setIsSigningUp(false);
     }
@@ -366,10 +367,11 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
         colors: ['#3D6E50', '#D67D5C', '#5A5A40'],
       });
 
-      setToastMsg(`✅ Escrow Released! $${res.claimedAmount.toFixed(2)} has been credited to ${claimNameInput}'s Stripe Connect balance.`);
+      setToastMsg(`Escrow Released! $${res.claimedAmount.toFixed(2)} has been credited to ${claimNameInput}'s verified account.`);
       setTimeout(() => setToastMsg(null), 6000);
     } catch (err: any) {
-      alert('Escrow claim failed: ' + err.message);
+      setToastMsg('Escrow claim failed: ' + err.message);
+      setTimeout(() => setToastMsg(null), 5000);
     } finally {
       setIsClaimSubmitting(false);
     }
@@ -426,7 +428,8 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
       }, 1200);
 
     } catch (e: any) {
-      alert('Error sending message: ' + e.message);
+      setToastMsg('Error sending message: ' + e.message);
+      setTimeout(() => setToastMsg(null), 5000);
     } finally {
       setIsSendingMessage(false);
     }
@@ -458,15 +461,16 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
       setToastMsg(`Message thread "${newThreadSubject}" created.`);
       setTimeout(() => setToastMsg(null), 4000);
     } catch (err: any) {
-      alert('Failed to start thread: ' + err.message);
+      setToastMsg('Failed to start thread: ' + err.message);
+      setTimeout(() => setToastMsg(null), 5000);
     }
   };
 
-  const fundTotal = metrics?.total_society_fund_usd || 76408.00;
+  const fundTotal = metrics?.total_society_fund_usd || 95510.00;
   const grossMRR = metrics?.total_subscription_revenue_usd || 191020.00;
   const totalSubs = metrics?.total_active_subscribers || 4080;
   const holdingEscrow = metrics?.unallocated_holding_escrow_usd || 14280.00;
-  const perCreatorEst = metrics?.estimated_payout_per_registered_creator || 424.48;
+  const perCreatorEst = metrics?.estimated_payout_per_registered_creator || 530.61;
 
   const currentThread = threads.find(t => t.id === activeThreadId);
 
@@ -589,7 +593,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   {customBadgeConfig?.appName ? `${customBadgeConfig.appName} Copyright & Royalty Portal` : 'H.U.M.A.N. Copyright & Royalty Portal'}
                 </h1>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#FAF0EC] text-[#D67D5C] border border-[#EECDBC]">
-                  40% Split Direct
+                  50% Split Direct
                 </span>
                 {customBadgeConfig?.isOfficialVerified && (
                   <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[#EBF3ED] text-[#3D6E50] border border-[#C9D1BE]">
@@ -762,11 +766,11 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
               </div>
 
               <h2 className="text-3xl sm:text-5xl font-extrabold text-[#2D2926] tracking-tight leading-tight">
-                Where Human Creativity Collects <span className="text-[#3D6E50]">40% of AI Subscriptions</span>
+                Where Human Creativity Collects <span className="text-[#3D6E50]">50% of AI Subscriptions</span>
               </h2>
 
               <p className="text-base sm:text-lg text-[#6A655C] leading-relaxed">
-                Welcome to the dedicated portal for Authors, Musicians, Open-Source Programmers, and Visual Artists. When AI applications build on your work, 40% of all subscription revenue is automatically routed to our non-profit Society Fund in Stripe Connect and paid directly to verified creators.
+                Welcome to the dedicated portal for Authors, Musicians, Open-Source Programmers, and Visual Artists. When AI applications build on your work, 50% of all subscription revenue is automatically routed via Omega Direct-Rail to our non-profit Society Covenant Fund (35% Pool A Creators, 7.5% Pool B Stewards, 7.5% Pool C Humanitarian Aid).
               </p>
 
               {/* CTA Group */}
@@ -801,15 +805,15 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
             {/* Quick Live Telemetry Bar */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-6 border-t border-[#E5E0D8]">
               <div className="space-y-1">
-                <span className="text-[11px] font-mono text-[#8C857B] uppercase block">Current 40% Fund</span>
+                <span className="text-[11px] font-mono text-[#8C857B] uppercase block">Current 50% Fund</span>
                 <div className="text-xl sm:text-2xl font-bold text-[#5A5A40]">${fundTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                <div className="text-[10px] font-mono text-[#3D6E50]">Auto-Split in Stripe</div>
+                <div className="text-[10px] font-mono text-[#3D6E50]">Omega Direct-Rail Auto-Split</div>
               </div>
 
               <div className="space-y-1">
                 <span className="text-[11px] font-mono text-[#8C857B] uppercase block">Active Subscribers</span>
                 <div className="text-xl sm:text-2xl font-bold text-[#2D2926]">{totalSubs.toLocaleString()} paying users</div>
-                <div className="text-[10px] font-mono text-[#6A655C]">Across 4 Flagship Apps</div>
+                <div className="text-[10px] font-mono text-[#6A655C]">Across 5 Connected Apps</div>
               </div>
 
               <div className="space-y-1">
@@ -839,7 +843,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 Choose Your Creator Path & Start Earning
               </h3>
               <p className="text-xs text-[#6A655C] leading-relaxed">
-                Step-by-step guidance across Prose & Worldbuilding, Sonic & Timbre, Cleanroom Code, and Visual Vectors. Complete milestones, estimate monthly royalties, and bind your works to the 40% Society Fund.
+                Step-by-step guidance across Prose &amp; Worldbuilding, Sonic &amp; Timbre, Cleanroom Code, and Visual Vectors. Complete milestones, estimate monthly royalties, and bind your works to the 50% People&apos;s Covenant Fund.
               </p>
               <div className="pt-2 flex items-center gap-3">
                 <button
@@ -881,9 +885,9 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
               <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E5E0D8] w-fit">
                 <Landmark className="w-6 h-6 text-[#5A5A40]" />
               </div>
-              <h3 className="text-base font-bold text-[#2D2926]">1. Guaranteed 40% Subscription Royalty</h3>
+              <h3 className="text-base font-bold text-[#2D2926]">1. Guaranteed 50% Subscription Royalty</h3>
               <p className="text-xs text-[#6A655C] leading-relaxed">
-                40% of every subscription paid across all apps carrying the H.U.M.A.N. badge is intercepted in Stripe and distributed to registered rights holders.
+                50% of every subscription paid across all apps carrying the H.U.M.A.N. badge is split via Omega Direct-Rail into the Society Covenant Fund (35% Creators, 7.5% Stewards, 7.5% Humanitarian Aid).
               </p>
               <button onClick={() => navigateTo('royalties')} className="text-xs font-mono text-[#5A5A40] font-bold flex items-center gap-1 hover:underline pt-2 cursor-pointer">
                 <span>Explore Royalty Mechanics</span>
@@ -935,7 +939,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
               </div>
               <h2 className="text-2xl font-bold text-[#2D2926]">Register as a Verified Copyright Owner</h2>
               <p className="text-xs text-[#6A655C] leading-relaxed">
-                Connect your intellectual property to The H.U.M.A.N. Initiative to instantly receive 40% subscription splits and claim holding escrow funds.
+                Connect your intellectual property to The H.U.M.A.N. Initiative to instantly receive 50% People&apos;s Covenant splits and claim holding escrow funds.
               </p>
             </div>
 
@@ -1021,7 +1025,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Author or collective holding commercial rights and registering for the 40% subscription pool..."
+                  placeholder="Author or collective holding commercial rights and registering for the 50% People's Covenant pool..."
                   value={signupBio}
                   onChange={(e) => setSignupBio(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-[#FAF8F5] border border-[#DCD5CA] text-xs text-[#2D2926] focus:outline-none focus:border-[#5A5A40]"
@@ -1035,7 +1039,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 </div>
                 <ul className="list-disc pl-5 space-y-1 text-[11px]">
                   <li>Instant C2PA Decentralized Identifier (DID) cryptographic minting.</li>
-                  <li>Immediate eligibility for the bi-monthly 40% Society Fund batch payout.</li>
+                  <li>Immediate eligibility for the bi-monthly 50% Society Covenant Fund batch payout.</li>
                   <li>Zero-Ingestion AI Cleanroom compliance audited against Fairly Trained standards.</li>
                 </ul>
               </div>
@@ -1057,12 +1061,12 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   {isSigningUp ? (
                     <>
                       <RefreshCw className="w-4 h-4 text-white animate-spin" />
-                      <span>Provisioning C2PA DID & Stripe Account...</span>
+                      <span>Provisioning C2PA DID &amp; Omega Payout Account...</span>
                     </>
                   ) : (
                     <>
                       <Check className="w-4 h-4 text-white" />
-                      <span>Complete Registration & Activate 40% Split</span>
+                      <span>Complete Registration &amp; Activate 50% Split</span>
                     </>
                   )}
                 </button>
@@ -1164,7 +1168,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-1">
                   <span className="text-[10px] font-mono text-[#8C857B] uppercase block">Total Lifetime Earned</span>
                   <div className="text-2xl font-bold text-[#2D2926]">${currentCreator.total_earned_usd.toFixed(2)}</div>
-                  <span className="text-[10px] text-[#5A5A40]">40% Society Pool</span>
+                  <span className="text-[10px] text-[#5A5A40]">50% Society Covenant Pool</span>
                 </div>
 
                 <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-1">
@@ -1200,10 +1204,10 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   <span>Dedicated Royalties URL: /royalties</span>
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-bold text-[#2D2926] tracking-tight">
-                  40% Subscription Royalties Distribution Covenant
+                  50% People&apos;s Covenant Royalties Distribution
                 </h2>
                 <p className="text-xs sm:text-sm text-[#6A655C] leading-relaxed">
-                  Every subscription across Tome Crafter, RLM Pro Studio, ForgeOS App Builders, and RL Easy Flow contributes 40% into the non-profit Society Fund. Payouts are computed dynamically based on total active subscriber tallies and disbursed directly via Stripe Connect.
+                  Every subscription across Tome Crafter, RLM Pro Studio, ForgeOS App Builders, RL Easy Flow, and Omega Hub contributes 50% into the non-profit Society Covenant Fund (35% Pool A Creators, 7.5% Pool B Stewards, 7.5% Pool C Humanitarian Aid).
                 </p>
               </div>
 
@@ -1223,13 +1227,13 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
               <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-2">
                 <span className="text-[11px] font-mono uppercase font-bold text-[#6A655C]">Gross MRR</span>
                 <div className="text-2xl sm:text-3xl font-bold text-[#2D2926]">${grossMRR.toLocaleString('en-US', { minimumFractionDigits: 0 })}</div>
-                <span className="text-[10px] font-mono text-[#6A655C] block pt-1 border-t border-[#E5E0D8]">Across 4 Flagship Apps</span>
+                <span className="text-[10px] font-mono text-[#6A655C] block pt-1 border-t border-[#E5E0D8]">Across 5 Connected Apps</span>
               </div>
 
               <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-2">
-                <span className="text-[11px] font-mono uppercase font-bold text-[#6A655C]">40% Society Fund Pool</span>
+                <span className="text-[11px] font-mono uppercase font-bold text-[#6A655C]">50% Society Fund Pool</span>
                 <div className="text-2xl sm:text-3xl font-bold text-[#3D6E50]">${fundTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
-                <span className="text-[10px] font-mono text-[#3D6E50] block pt-1 border-t border-[#E5E0D8]">Stripe Connect Non-Profit</span>
+                <span className="text-[10px] font-mono text-[#3D6E50] block pt-1 border-t border-[#E5E0D8]">Omega Direct-Rail Non-Profit</span>
               </div>
 
               <div className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-2">
@@ -1248,13 +1252,13 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
 
           {/* App Subscription Matrix */}
           <div className="rounded-2xl border border-[#E5E0D8] bg-[#FFFFFF] p-6 space-y-4 shadow-2xs">
-            <h3 className="text-base font-bold text-[#2D2926]">Fleet Applications Contributing 40% Subscription Revenue</h3>
+            <h3 className="text-base font-bold text-[#2D2926]">Fleet Applications Contributing 50% Subscription Revenue</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {appSubs.map((app) => (
                 <div key={app.app_id} className="p-5 rounded-2xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-[#2D2926]">{app.app_name}</h4>
-                    <span className="text-xs font-mono font-bold text-[#3D6E50]">40% Split: ${app.society_fund_40pct_contribution.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-xs font-mono font-bold text-[#3D6E50]">50% Split: ${app.society_fund_40pct_contribution.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                   </div>
                   <div className="text-xs font-mono text-[#6A655C] space-y-1">
                     <div>Subscribers: <strong className="text-[#2D2926]">{app.subscribers_count.toLocaleString()}</strong> @ ${app.plan_price_monthly.toFixed(0)}/mo</div>
@@ -1357,9 +1361,9 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
               </div>
 
               <div className="p-4 rounded-xl bg-[#FAF8F5] border border-[#E5E0D8] space-y-1">
-                <div className="text-[10px] font-mono uppercase text-[#8C857B] font-bold">4. 40% Stripe Split</div>
+                <div className="text-[10px] font-mono uppercase text-[#8C857B] font-bold">4. 50% Covenant Split</div>
                 <div className="text-xs font-bold text-[#D67D5C]">Non-Profit Society Fund</div>
-                <p className="text-[11px] text-[#6A655C]">Direct-to-bank instant transfers.</p>
+                <p className="text-[11px] text-[#6A655C]">Direct-Rail Omega settlement (35% / 7.5% / 7.5%).</p>
               </div>
             </div>
           </div>
@@ -1379,9 +1383,10 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   className="px-3 py-1.5 rounded-xl bg-[#FAF8F5] border border-[#DCD5CA] text-xs font-mono text-[#2D2926] focus:outline-none"
                 >
                   <option value="tomecrafter-ai-book-studio">Tome Crafter</option>
-                  <option value="remix-lyria-studio-5954">RLM Pro Studio</option>
+                  <option value="rlm-pro-studio">RLM Pro Studio</option>
                   <option value="forgeos-app-builder-tester">ForgeOS App Builders</option>
                   <option value="rl-easy-flow">RL Easy Flow</option>
+                  <option value="rlmv-editor">RLMV Music Video Editor</option>
                 </select>
               </div>
             </div>
@@ -1391,10 +1396,10 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 "@context": "https://c2pa.org/specifications/v2/context.jsonld",
                 "manifest_version": "2.1.0",
                 "appId": selectedAppInspect,
-                "claim_generator": "The H.U.M.A.N. Ethical AI Builder Initiative v2.4 (humanethicalai)",
+                "claim_generator": "The H.U.M.A.N. Ethical AI Protocol v3.0.0-cleanroom (humanethicalai.ai.studio)",
                 "signature": {
                   "issuer": "did:human:ethical-ai-authority",
-                  "algorithm": "Ed25519",
+                  "algorithm": "WebCrypto-SHA256",
                   "verified": true,
                   "timestamp": new Date().toISOString()
                 },
@@ -1407,9 +1412,9 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   },
                   {
                     "label": "c2pa.compensation.society_fund",
-                    "standard": "The H.U.M.A.N. Initiative 40% Subscription Royalty Covenant",
-                    "society_fund_share_pct": 40,
-                    "stripe_connect_mode": "Auto-Split Batch Disbursed"
+                    "standard": "The H.U.M.A.N. Initiative 50% People's Covenant",
+                    "society_fund_share_pct": 50,
+                    "direct_rail_mode": "Omega /pay Sovereign Split (35% Pool A / 7.5% Pool B / 7.5% Pool C)"
                   }
                 ]
               }, null, 2)}</pre>
@@ -1433,7 +1438,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                 Work Activation & Holding Escrow Claim Station
               </h2>
               <p className="text-xs sm:text-sm text-[#6A655C] leading-relaxed">
-                When AI tools reference your creative works without prior registration, 40% subscription revenues are safely locked in Stripe Connect holding escrow. Complete a one-click personhood claim to release accrued funds directly to your bank.
+                When AI tools reference your creative works without prior registration, 50% People&apos;s Covenant subscription revenues are safely locked in holding escrow. Complete a one-click personhood claim to release accrued funds directly to your account.
               </p>
             </div>
 
@@ -1686,7 +1691,7 @@ export const CopyrightOwnerWebsite: React.FC<CopyrightOwnerWebsiteProps> = ({
                   onChange={(e) => setNewThreadCategory(e.target.value as any)}
                   className="w-full px-3 py-2 rounded-xl bg-[#FAF8F5] border border-[#DCD5CA] text-xs text-[#2D2926] focus:outline-none"
                 >
-                  <option value="Royalty Payout">Royalty Payout & 40% Split Inquiry</option>
+                  <option value="Royalty Payout">Royalty Payout &amp; 50% Covenant Split Inquiry</option>
                   <option value="C2PA Claim">C2PA Content Credentials Assertion</option>
                   <option value="Activation">Holding Escrow Release & Activation</option>
                   <option value="Dispute">Attribution or License Dispute</option>

@@ -47,6 +47,8 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
   const [grantAccessModalTester, setGrantAccessModalTester] = useState<Tester | null>(null);
   const [selectedAppToGrant, setSelectedAppToGrant] = useState<AppName>('Tome Crafter');
 
+  const [checkoutModalData, setCheckoutModalData] = useState<{ url: string; sessionId: string; appName: AppName; testerName: string } | null>(null);
+
   const showToast = (text: string, type: 'success' | 'info' | 'error' = 'success') => {
     setToastMessage({ text, type });
     setTimeout(() => setToastMessage(null), 4500);
@@ -55,31 +57,37 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
   const handleGrantAccess = async (tester: Tester, appName: AppName) => {
     setActionLoadingId(`grant_${tester.id}_${appName}`);
     try {
-      const result = await TesterService.grantAccess(tester.id, appName, 'Enterprise Beta');
+      const result = await TesterService.initiateOmegaCheckout(tester.id, appName, 'Enterprise Sovereign', 4900);
       confetti({
         particleCount: 40,
         spread: 60,
         origin: { y: 0.7 },
         colors: ['#10B981', '#34D399', '#059669'],
       });
-      showToast(`Access granted for ${appName}! License: ${result.licenseKey}`, 'success');
+      showToast(`Signed Omega Direct-Rail /pay session created for ${appName}: ${result.sessionId}`, 'success');
+      setCheckoutModalData({
+        url: result.url,
+        sessionId: result.sessionId,
+        appName,
+        testerName: tester.name,
+      });
       onRefresh();
       setGrantAccessModalTester(null);
     } catch (err: any) {
-      showToast(`Failed to grant access: ${err.message}`, 'error');
+      showToast(`Failed to initiate Omega Direct-Rail checkout: ${err.message}`, 'error');
     } finally {
       setActionLoadingId(null);
     }
   };
 
-  const handleResetStripeSandbox = async (tester: Tester) => {
+  const handleResetContributorSession = async (tester: Tester) => {
     setActionLoadingId(`reset_${tester.id}`);
     try {
-      const result = await TesterService.resetStripeSandbox(tester.id, tester.email);
-      showToast(`Stripe Sandbox reset for ${tester.name}. Test tokens refreshed.`, 'info');
+      const result = await TesterService.resetContributorSession(tester.id, tester.email);
+      showToast(result.message || `Omega contributor session reset for ${tester.name}.`, 'info');
       onRefresh();
     } catch (err: any) {
-      showToast(`Failed to reset Stripe Sandbox: ${err.message}`, 'error');
+      showToast(`Failed to reset Omega contributor session: ${err.message}`, 'error');
     } finally {
       setActionLoadingId(null);
     }
@@ -210,14 +218,14 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
 
         <div className="rounded-xl border border-[#E5E0D8] bg-[#FFFFFF] p-4.5 relative overflow-hidden shadow-2xs">
           <div className="flex items-center justify-between text-xs text-[#D67D5C] font-mono mb-1">
-            <span>STRIPE SANDBOX ACTIVE</span>
+            <span>OMEGA DIRECT-RAIL</span>
             <RefreshCw className="w-4 h-4 text-[#D67D5C]" />
           </div>
           <div className="text-2xl font-bold text-[#2D2926]">
-            {testers.filter(t => t.current_subscription_status.includes('Stripe')).length}
+            {testers.filter(t => t.current_subscription_status.includes('Omega') || t.current_subscription_status.includes('Connect')).length}
           </div>
           <div className="text-[11px] text-[#6A655C] mt-1">
-            Sandbox & Connect Payout channels
+            Canada RTR & Global Pool C ($FOOD / $MED)
           </div>
         </div>
 
@@ -283,6 +291,10 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
             className="px-2.5 py-1.5 rounded-lg bg-[#F9F7F2] border border-[#DCD5CA] text-xs text-[#2D2926] focus:outline-none focus:border-[#5A5A40]"
           >
             <option value="All">All Roles</option>
+            <option value="$FOOD">$FOOD (Humanitarian Aid)</option>
+            <option value="$MED">$MED (Medical Corridor)</option>
+            <option value="$CREW">$CREW (Fleet Operations)</option>
+            <option value="Developer">Developer</option>
             <option value="App Creator">App Creator</option>
             <option value="OSS Maintainer">OSS Maintainer</option>
             <option value="Artisan Author">Artisan Author</option>
@@ -343,10 +355,10 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                 <th className="px-4 py-3">Tester & Identity</th>
                 <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">App Access List</th>
-                <th className="px-4 py-3">Stripe Status</th>
+                <th className="px-4 py-3">Settlement Rail</th>
                 <th className="px-4 py-3">
-                  <span className="block">Royalties (Sample)</span>
-                  <span className="text-[9px] text-[#8C857B] font-sans lowercase font-normal">*testing only</span>
+                  <span className="block">Royalties (50% Pool)</span>
+                  <span className="text-[9px] text-[#8C857B] font-sans lowercase font-normal">Covenant Ledger</span>
                 </th>
                 <th className="px-4 py-3 text-right">Status Controls</th>
               </tr>
@@ -399,10 +411,12 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                       {/* Role */}
                       <td className="px-4 py-3.5">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-mono border ${
-                          tester.role === 'App Creator'
+                          tester.role === 'App Creator' || tester.role === 'Developer'
                             ? 'bg-[#F0F2EB] text-[#5A5A40] border-[#C9D1BE]'
-                            : tester.role === 'OSS Maintainer'
+                            : tester.role === 'OSS Maintainer' || tester.role === '$CREW'
                             ? 'bg-[#FAF0EC] text-[#D67D5C] border-[#EECDBC]'
+                            : tester.role === '$FOOD' || tester.role === '$MED'
+                            ? 'bg-[#EBF3EE] text-[#3D6E50] border-[#C5DEC0]'
                             : tester.role === 'Musician'
                             ? 'bg-[#F5EFF8] text-[#7A4E82] border-[#E0D0E5]'
                             : 'bg-[#F2ECE4] text-[#6A655C] border-[#DCD5CA]'
@@ -425,18 +439,18 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                         </div>
                       </td>
 
-                      {/* Stripe Subscription Status */}
+                      {/* Settlement Status */}
                       <td className="px-4 py-3.5">
                         <div className="flex flex-col">
                           <span className={`inline-flex items-center gap-1 text-xs font-mono font-medium ${
-                            tester.current_subscription_status === 'Stripe Connect Active'
+                            tester.current_subscription_status === 'Omega Verified' || tester.current_subscription_status === 'Stripe Connect Active'
                               ? 'text-[#5A5A40]'
-                              : tester.current_subscription_status === 'Stripe Sandbox'
+                              : tester.current_subscription_status === 'Omega Direct-Rail'
                               ? 'text-[#D67D5C]'
                               : 'text-[#9C7536]'
                           }`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${
-                              tester.current_subscription_status === 'Stripe Connect Active'
+                              tester.current_subscription_status === 'Omega Verified' || tester.current_subscription_status === 'Stripe Connect Active'
                                 ? 'bg-[#5A5A40]'
                                 : 'bg-[#D67D5C]'
                             }`} />
@@ -461,27 +475,27 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                       {/* Status Controls */}
                       <td className="px-4 py-3.5 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5">
-                          {/* Grant Access Button */}
+                          {/* Initiate Omega /pay Access Button */}
                           <button
                             onClick={() => {
                               setGrantAccessModalTester(tester);
                             }}
                             className="px-2.5 py-1 rounded text-xs font-medium bg-[#F5F1EB] hover:bg-[#EBE5DC] text-[#5A5A40] border border-[#DCD5CA] transition-colors flex items-center gap-1 cursor-pointer"
-                            title="Grant access to another app or tier"
+                            title="Generate signed Omega Direct-Rail /pay license checkout"
                           >
                             <Key className="w-3 h-3 text-[#5A5A40]" />
-                            <span>Grant Access</span>
+                            <span>Omega /pay</span>
                           </button>
 
-                          {/* Reset Stripe Sandbox Button */}
+                          {/* Reset Contributor Session Button */}
                           <button
-                            onClick={() => handleResetStripeSandbox(tester)}
+                            onClick={() => handleResetContributorSession(tester)}
                             disabled={isResetting}
                             className="px-2.5 py-1 rounded text-xs font-medium bg-[#FAF0EC] hover:bg-[#F5E6DF] text-[#D67D5C] border border-[#EECDBC] transition-colors flex items-center gap-1 disabled:opacity-50 cursor-pointer"
-                            title="Reset Stripe Sandbox tokens and refresh customer account"
+                            title="Reset contributor session via Omega Hub API"
                           >
                             <RefreshCw className={`w-3 h-3 text-[#D67D5C] ${isResetting ? 'animate-spin' : ''}`} />
-                            <span>Reset Sandbox</span>
+                            <span>Reset Session</span>
                           </button>
 
                           {/* Welcome Email Preview */}
@@ -576,10 +590,10 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
               </div>
 
               <div className="rounded-lg bg-[#F5F1EB] p-3 border border-[#E5E0D8] text-xs font-mono text-[#5A5A40]">
-                <span className="text-[#2D2926] font-bold block mb-1">Security & Webhook Automation:</span>
-                • Generates cryptographically signed H.U.M.A.N. Protocol License Key<br/>
-                • Sets up Stripe Connect micro-patronage routing<br/>
-                • Dispatches welcome credential email
+                <span className="text-[#2D2926] font-bold block mb-1">Omega Direct-Rail /pay Automation:</span>
+                • Signs sorted query payload via HMAC-SHA256 (OMEGA_GATEWAY_SECRET)<br/>
+                • Routes 50% People&apos;s Covenant across Pool A (35%), Pool B (7.5%), Pool C (7.5%)<br/>
+                • Default Corridor: Global Pool C ($FOOD / $MED) • Rail: canada-rtr
               </div>
             </div>
 
@@ -596,8 +610,53 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                 className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#D67D5C] hover:bg-[#C4704F] text-white shadow-sm flex items-center gap-1.5 cursor-pointer"
               >
                 <Key className="w-3.5 h-3.5 text-white" />
-                <span>Confirm & Grant Access</span>
+                <span>Generate Signed /pay Checkout</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Signed Omega Direct-Rail /pay Checkout Link Modal */}
+      {checkoutModalData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#2D2926]/40 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-xl border border-[#E5E0D8] bg-[#FFFFFF] p-6 shadow-xl space-y-4 text-[#2D2926]">
+            <div className="flex items-center justify-between border-b border-[#E5E0D8] pb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-[#3D6E50]" />
+                <h3 className="font-semibold text-[#2D2926]">Signed Omega Direct-Rail /pay Checkout</h3>
+              </div>
+              <button
+                onClick={() => setCheckoutModalData(null)}
+                className="text-[#8C857B] hover:text-[#2D2926] text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="text-xs text-[#6A655C]">
+              HMAC-SHA256 signed checkout URL generated for <strong>{checkoutModalData.testerName}</strong> ({checkoutModalData.appName}). Session ID: <code className="font-mono text-[#5A5A40]">{checkoutModalData.sessionId}</code>
+            </p>
+            <div className="rounded-lg bg-[#FAF8F5] border border-[#E5E0D8] p-3 font-mono text-[11px] break-all text-[#2D2926] select-all max-h-32 overflow-y-auto">
+              {checkoutModalData.url}
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#E5E0D8]">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(checkoutModalData.url);
+                  showToast('Signed /pay URL copied to clipboard.', 'success');
+                }}
+                className="px-3.5 py-2 rounded-lg text-xs font-medium bg-[#F5F1EB] hover:bg-[#EBE5DC] text-[#5A5A40] border border-[#DCD5CA] cursor-pointer"
+              >
+                Copy Signed URL
+              </button>
+              <a
+                href={checkoutModalData.url}
+                target="_top"
+                className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#D67D5C] hover:bg-[#C4704F] text-white flex items-center gap-1.5 shadow-sm"
+              >
+                <span>Open Omega /pay</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
           </div>
         </div>
@@ -631,7 +690,7 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
               <div className="space-y-3 font-sans text-sm text-[#2D2926]">
                 <p>Hello <strong>{emailModalTester.name}</strong>,</p>
                 <p className="text-[#5A5A40] leading-relaxed">
-                  You have been successfully registered as a <strong>{emailModalTester.role}</strong> on the H.U.M.A.N. network (Powering Ethical AI apps, And Paying the People). Every time AI synthesizes code, music, art, or content utilizing open-source craft, 40% subscription royalties and micro-payments are streamed directly to your Stripe Connect account.
+                  You have been successfully registered as a <strong>{emailModalTester.role}</strong> on the H.U.M.A.N. network (Powering Ethical AI apps, And Paying the People). Every time AI synthesizes code, music, art, or content utilizing open-source craft, 50% People&apos;s Covenant distributions (Pool A Creators 35%, Pool B Stewards 7.5%, Pool C Humanitarian Aid 7.5%) are routed via Omega Direct-Rail (/pay).
                 </p>
                 
                 <div className="rounded-lg bg-[#FFFFFF] p-3.5 border border-[#E5E0D8] font-mono text-xs text-[#2D2926] space-y-1.5 shadow-2xs">
@@ -643,7 +702,7 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                     </div>
                   ))}
                   <div className="pt-1 text-[#D67D5C]">
-                    Stripe Sandbox ID: <strong>{emailModalTester.stripe_account_id}</strong>
+                    Omega Direct-Rail ID: <strong>{emailModalTester.stripe_account_id}</strong>
                   </div>
                 </div>
 
@@ -709,18 +768,17 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-[#6A655C]">STRIPE STATUS</span>
+                <span className="text-[#6A655C]">RAIL STATUS</span>
                 <span className="text-[#5A5A40] font-bold">{selectedTester.current_subscription_status}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-[#6A655C]">STRIPE ACCOUNT</span>
+                <span className="text-[#6A655C]">SETTLEMENT ACCOUNT</span>
                 <span className="text-[#D67D5C] font-mono text-[11px]">{selectedTester.stripe_account_id}</span>
               </div>
               <div className="flex justify-between items-center text-xs font-mono">
-                <span className="text-[#6A655C]">ROYALTIES (SAMPLE)</span>
+                <span className="text-[#6A655C]">ROYALTIES (50% COVENANT)</span>
                 <span className="text-[#2D2926] font-bold text-sm">
                   ${selectedTester.total_royalties_received.toFixed(2)}
-                  <span className="text-[10px] text-[#8C857B] font-normal ml-1">(test data)</span>
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs font-mono">
@@ -771,15 +829,15 @@ export const TesterConsole: React.FC<TesterConsoleProps> = ({
                 className="w-full py-2.5 rounded-lg text-xs font-semibold bg-[#D67D5C] hover:bg-[#C4704F] text-white flex items-center justify-center gap-2 shadow-sm cursor-pointer"
               >
                 <Key className="w-3.5 h-3.5" />
-                <span>Grant Additional App Access</span>
+                <span>Initiate Omega /pay Access</span>
               </button>
 
               <button
-                onClick={() => handleResetStripeSandbox(selectedTester)}
+                onClick={() => handleResetContributorSession(selectedTester)}
                 className="w-full py-2.5 rounded-lg text-xs font-medium bg-[#F5F1EB] hover:bg-[#EBE5DC] text-[#5A5A40] border border-[#DCD5CA] flex items-center justify-center gap-2 cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                <span>Reset Stripe Sandbox Customer</span>
+                <span>Reset Omega Contributor Session</span>
               </button>
 
               <button

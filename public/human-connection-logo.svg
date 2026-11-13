@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" fill="none">
+  <defs>
+    <radialGradient id="humanBgGlow" cx="50%" cy="50%" r="55%">
+      <stop offset="0%" stop-color="#1D3330" />
+      <stop offset="100%" stop-color="#131D1D" />
+    </radialGradient>
+    <filter id="mintGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="2.2" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Dark slate-teal background -->
+  <rect width="240" height="240" rx="28" fill="url(#humanBgGlow)" />
+
+  <!-- PCB Circuit Traces (Top, Bottom, Left, Right & Diagonals) -->
+  <g stroke="#64E8AF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+    <!-- Top traces -->
+    <path d="M120 56 V10" />
+    <circle cx="120" cy="8" r="3.2" fill="#64E8AF" />
+    <path d="M111 57 V28 L104 21 V12" />
+    <circle cx="104" cy="10" r="2.6" fill="#64E8AF" />
+    <path d="M129 57 V28 L136 21 V12" />
+    <circle cx="136" cy="10" r="2.6" fill="#64E8AF" />
+    <path d="M102 60 V36 L88 22 V10" />
+    <circle cx="88" cy="10" r="2.6" fill="#64E8AF" />
+    <path d="M138 60 V36 L152 22 V10" />
+    <circle cx="152" cy="10" r="2.6" fill="#64E8AF" />
+    <path d="M95 62 V46" />
+    <circle cx="95" cy="44" r="2.2" fill="#64E8AF" />
+    <path d="M145 62 V46" />
+    <circle cx="145" cy="44" r="2.2" fill="#64E8AF" />
+
+    <!-- Bottom traces -->
+    <path d="M120 184 V230" />
+    <circle cx="120" cy="232" r="3.2" fill="#64E8AF" />
+    <path d="M111 183 V212 L104 219 V228" />
+    <circle cx="104" cy="230" r="2.6" fill="#64E8AF" />
+    <path d="M129 183 V212 L136 219 V228" />
+    <circle cx="136" cy="230" r="2.6" fill="#64E8AF" />
+    <path d="M102 180 V204 L88 218 V230" />
+    <circle cx="88" cy="230" r="2.6" fill="#64E8AF" />
+    <path d="M138 180 V204 L152 218 V230" />
+    <circle cx="152" cy="230" r="2.6" fill="#64E8AF" />
+    <path d="M95 178 V194" />
+    <circle cx="95" cy="196" r="2.2" fill="#64E8AF" />
+    <path d="M145 178 V194" />
+    <circle cx="145" cy="196" r="2.2" fill="#64E8AF" />
+
+    <!-- Left traces -->
+    <path d="M56 120 H10" />
+    <circle cx="8" cy="120" r="3.2" fill="#64E8AF" />
+    <path d="M57 111 H28 L21 104 H12" />
+    <circle cx="10" cy="104" r="2.6" fill="#64E8AF" />
+    <path d="M57 129 H28 L21 136 H12" />
+    <circle cx="10" cy="136" r="2.6" fill="#64E8AF" />
+    <path d="M60 102 H36 L22 88 H10" />
+    <circle cx="10" cy="88" r="2.6" fill="#64E8AF" />
+    <path d="M60 138 H36 L22 152 H10" />
+    <circle cx="10" cy="152" r="2.6" fill="#64E8AF" />
+
+    <!-- Right traces -->
+    <path d="M184 120 H230" />
+    <circle cx="232" cy="120" r="3.2" fill="#64E8AF" />
+    <path d="M183 111 H212 L219 104 H228" />
+    <circle cx="230" cy="104" r="2.6" fill="#64E8AF" />
+    <path d="M183 129 H212 L219 136 H228" />
+    <circle cx="230" cy="136" r="2.6" fill="#64E8AF" />
+    <path d="M180 102 H204 L218 88 H230" />
+    <circle cx="230" cy="88" r="2.6" fill="#64E8AF" />
+    <path d="M180 138 H204 L218 152 H230" />
+    <circle cx="230" cy="152" r="2.6" fill="#64E8AF" />
+
+    <!-- Diagonal Top-Left -->
+    <path d="M74 74 L12 12" />
+    <path d="M62 62 V30 L42 10" />
+    <path d="M52 52 H20 L8 40" />
+
+    <!-- Diagonal Top-Right -->
+    <path d="M166 74 L228 12" />
+    <path d="M178 62 V30 L198 10" />
+    <path d="M188 52 H220 L232 40" />
+
+    <!-- Diagonal Bottom-Left -->
+    <path d="M74 166 L12 228" />
+    <path d="M62 178 V210 L42 230" />
+    <path d="M52 188 H20 L8 200" />
+
+    <!-- Diagonal Bottom-Right -->
+    <path d="M166 166 L228 228" />
+    <path d="M178 178 V210 L198 230" />
+    <path d="M188 188 H220 L232 200" />
+  </g>
+
+  <!-- Central Medallion Circle -->
+  <circle cx="120" cy="120" r="68" fill="#131E1E" stroke="#64E8AF" stroke-width="4.2" filter="url(#mintGlow)" />
+
+  <!-- Upper-Center Fingerprint Crest & Node Lattice -->
+  <g transform="translate(120, 99)">
+    <!-- Scalloped wavy crest border -->
+    <path
+      d="M0 -35 C8 -35 12 -32 18 -30 C25 -27 30 -22 33 -15 C36 -8 35 0 34 7 C32 16 27 24 20 29 C14 34 7 35 0 35 C-7 35 -14 34 -20 29 C-27 24 -32 16 -34 7 C-35 0 -36 -8 -33 -15 C-30 -22 -25 -27 -18 -30 C-12 -32 -8 -35 0 -35 Z"
+      stroke="#64E8AF"
+      stroke-width="2"
+      opacity="0.85"
+    />
+    <!-- Inner Ring -->
+    <circle cx="0" cy="0" r="27" stroke="#64E8AF" stroke-width="1.5" opacity="0.7" />
+
+    <!-- Geometric Constellation Ring -->
+    <polygon
+      points="0,-24 19,-14 23,7 12,21 -12,21 -23,7 -19,-14"
+      stroke="#64E8AF"
+      stroke-width="1.4"
+      opacity="0.9"
+    />
+    <!-- Connecting mesh lines -->
+    <line x1="0" y1="-24" x2="-19" y2="-14" stroke="#64E8AF" stroke-width="1" opacity="0.65" />
+    <line x1="0" y1="-24" x2="19" y2="-14" stroke="#64E8AF" stroke-width="1" opacity="0.65" />
+    <line x1="19" y1="-14" x2="12" y2="21" stroke="#64E8AF" stroke-width="1" opacity="0.55" />
+    <line x1="-19" y1="-14" x2="-12" y2="21" stroke="#64E8AF" stroke-width="1" opacity="0.55" />
+
+    <!-- Node dots -->
+    <circle cx="0" cy="-24" r="2.2" fill="#8CF7C8" />
+    <circle cx="19" cy="-14" r="2.2" fill="#8CF7C8" />
+    <circle cx="23" cy="7" r="2.2" fill="#8CF7C8" />
+    <circle cx="12" cy="21" r="2.2" fill="#8CF7C8" />
+    <circle cx="-12" cy="21" r="2.2" fill="#8CF7C8" />
+    <circle cx="-23" cy="7" r="2.2" fill="#8CF7C8" />
+    <circle cx="-19" cy="-14" r="2.2" fill="#8CF7C8" />
+
+    <!-- Fingerprint Whorls + Right Neural Pins -->
+    <g stroke="#7CF3BE" stroke-width="1.7" stroke-linecap="round" filter="url(#mintGlow)">
+      <path d="M-11 6 C-12 -5 -7 -13 0 -13 C7 -13 12 -5 11 7" />
+      <path d="M-8 10 C-9 -1 -5 -9 0 -9 C5 -9 8 -1 8 10" />
+      <path d="M-4 12 C-5 2 -3 -5 0 -5 C3 -5 5 2 4 12" />
+      <path d="M0 13 V1" />
+      <path d="M-14 2 C-15 -7 -9 -17 0 -17 C9 -17 14 -8 14 3" />
+      <!-- Neural circuit leads from fingerprint right side -->
+      <path d="M6 -6 L14 -6" stroke-width="1.2" />
+      <path d="M8 0 L17 0" stroke-width="1.2" />
+      <path d="M7 6 L15 6" stroke-width="1.2" />
+    </g>
+  </g>
+
+  <!-- Bold H.U.M.A.N. Wordmark inside bottom of medallion -->
+  <text
+    x="120"
+    y="163"
+    text-anchor="middle"
+    fill="#6CEBB3"
+    font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+    font-size="21"
+    font-weight="900"
+    letter-spacing="1.6"
+    filter="url(#mintGlow)"
+  >
+    H.U.M.A.N.
+  </text>
+</svg>

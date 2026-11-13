@@ -30,7 +30,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   const [githubHandle, setGithubHandle] = useState('');
   const [role, setRole] = useState<PlatformRole>('App Creator');
   const [selectedApps, setSelectedApps] = useState<AppName[]>(['Tome Crafter', 'RLM Pro Studio']);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('Stripe Sandbox');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>('Omega Direct-Rail');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,9 +108,9 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
               <UserPlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-emerald-100">Onboard New Beta Tester & Creator</h2>
+              <h2 className="text-lg font-bold text-emerald-100">Onboard Contributor &amp; Beta Tester</h2>
               <p className="text-xs text-emerald-400/80 font-mono">
-                Automated license generator & Stripe Connect welcome setup
+                Automated license generator &amp; Omega Hub contributor registry
               </p>
             </div>
           </div>
@@ -190,11 +190,15 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                 onChange={(e) => setRole(e.target.value as PlatformRole)}
                 className="w-full px-3 py-2 rounded-lg bg-[#040807] border border-emerald-800/60 text-sm text-emerald-100 focus:outline-none focus:border-emerald-400"
               >
-                <option value="App Creator">App Creator (Build & Deploy apps with 5-stage guardrails)</option>
-                <option value="OSS Maintainer">OSS Maintainer (Claim packages & receive micro-royalties)</option>
+                <option value="App Creator">App Creator (Build &amp; Deploy apps with 5-stage guardrails)</option>
+                <option value="OSS Maintainer">OSS Maintainer (Claim packages &amp; receive micro-royalties)</option>
                 <option value="Artisan Author">Artisan Author (Books, Literature, Research)</option>
-                <option value="Musician">Musician (Audio Stems & Soundtracks)</option>
-                <option value="Beta Tester">Beta Tester (Quality Assurance Sandbox)</option>
+                <option value="Musician">Musician (Audio Stems &amp; Soundtracks)</option>
+                <option value="Beta Tester">Beta Tester (Quality Assurance)</option>
+                <option value="$FOOD">$FOOD Contributor (Global Pool C Food Aid Corridor)</option>
+                <option value="$MED">$MED Contributor (Global Pool C Medical Aid Corridor)</option>
+                <option value="$CREW">$CREW Contributor (Operations &amp; Field Commons)</option>
+                <option value="Developer">Developer (Omega Cleanroom SDK Contributor)</option>
               </select>
             </div>
           </div>
@@ -227,19 +231,20 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
             </div>
           </div>
 
-          {/* Stripe Subscription Setup */}
+          {/* Omega Direct-Rail Setup */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-mono uppercase text-emerald-400 mb-1">
-                Stripe Subscription State
+                Omega Payment / Covenant Status
               </label>
               <select
                 value={subscriptionStatus}
                 onChange={(e) => setSubscriptionStatus(e.target.value as SubscriptionStatus)}
                 className="w-full px-3 py-2 rounded-lg bg-[#040807] border border-emerald-800/60 text-sm text-emerald-100 focus:outline-none focus:border-emerald-400"
               >
-                <option value="Stripe Sandbox">Stripe Sandbox (Test token routing)</option>
-                <option value="Stripe Connect Active">Stripe Connect Active (Live Micro-patronage)</option>
+                <option value="Omega Direct-Rail">Omega Direct-Rail (/pay Canada RTR)</option>
+                <option value="Omega Verified">Omega Verified (50% Covenant Active)</option>
+                <option value="Stripe Connect Active">Creator Direct Connect (Verified)</option>
                 <option value="Trial">Trial (14-day evaluation)</option>
               </select>
             </div>
@@ -262,12 +267,12 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
           <div className="rounded-xl border border-emerald-800/40 bg-emerald-950/30 p-3.5 text-xs text-emerald-300 space-y-1.5">
             <div className="flex items-center gap-1.5 font-bold text-emerald-400 font-mono">
               <Sparkles className="w-4 h-4 text-emerald-400" />
-              <span>Automated Onboarding Sequence:</span>
+              <span>Automated Onboarding Sequence (Omega v3.0.0-cleanroom):</span>
             </div>
             <ul className="list-disc list-inside space-y-1 text-emerald-300/80 font-mono text-[11px]">
               <li>Issues cryptographically signed H.U.M.A.N. Protocol License Keys for each assigned app</li>
-              <li>Provisions sandbox customer ID in Stripe test database</li>
-              <li>Generates & triggers tailored Welcome Email with credentials</li>
+              <li>Registers contributor role to Omega Hub (/api/v1/register-contributor)</li>
+              <li>Binds 50% People&apos;s Covenant Pool A/B/C split (Global Pool C $FOOD / $MED)</li>
             </ul>
           </div>
 

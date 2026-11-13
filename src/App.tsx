@@ -31,7 +31,6 @@ import { UniversalThemeHubModal } from './components/UniversalThemeHubModal';
 import { MasterAdminColorStudio } from './components/MasterAdminColorStudio';
 import { GoogleDriveManagerModal } from './components/GoogleDriveManagerModal';
 import { OwnerAuthModal } from './components/OwnerAuthModal';
-import HunterAuthGateway from '../HunterAuthGateway';
 import { ThemeProvider } from './context/ThemeContext';
 import { 
   Tester, 
@@ -103,7 +102,6 @@ function AppContent() {
     if (hash === 'technical-ai' || path.includes('/technical-ai') || tabParam === 'technical-ai') return 'technical-ai';
     if (hash === 'crypto-valuation' || hash === 'crypto' || path.includes('/crypto') || tabParam === 'crypto-valuation') return 'crypto-valuation';
     if (hash === 'crypto-wallet' || hash === 'wallet' || path.includes('/wallet') || tabParam === 'crypto-wallet' || tabParam === 'wallet') return 'crypto-wallet';
-    if (hash === 'hunter' || hash === 'treasure-hunt' || hash === 'decoder' || path.includes('/hunter') || path.includes('/treasure-hunt') || tabParam === 'hunter' || tabParam === 'treasure-hunt' || tabParam === 'decoder') return 'hunter';
     if (hash === 'merchants' || path.includes('/merchants')) return 'merchants';
     if (hash === 'developer-embed' || hash === 'developers' || path.includes('/developers') || path.includes('/embed')) return 'developer-embed';
     if (hash === 'testers' || path.includes('/testers')) return 'testers';
@@ -113,6 +111,49 @@ function AppContent() {
     if (hash === 'initiative' || path.includes('/initiative')) return 'initiative';
     return 'mission-home';
   });
+
+  const [isEmbedMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('embed') === '1';
+  });
+
+  const [omegaReturnBanner, setOmegaReturnBanner] = useState<{
+    status: 'success' | 'cancelled';
+    tier?: string;
+    sessionId?: string;
+  } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const params = new URLSearchParams(window.location.search);
+    const omegaStatus = params.get('omega_status');
+    if (omegaStatus === 'success') {
+      const tier = params.get('tier') || 'Pro Sovereign';
+      const sessionId = params.get('session_id') || '';
+      localStorage.setItem('omega_activated_tier', tier);
+      if (sessionId) localStorage.setItem('omega_session_id', sessionId);
+      return { status: 'success', tier, sessionId };
+    }
+    if (omegaStatus === 'cancelled') {
+      return { status: 'cancelled' };
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('omega_status') || params.has('tier') || params.has('session_id')) {
+      params.delete('omega_status');
+      params.delete('tier');
+      params.delete('session_id');
+      const remaining = params.toString();
+      const nextUrl = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash}`;
+      try {
+        window.history.replaceState({}, '', nextUrl);
+      } catch {
+        // Ignore history restrictions in sandboxed iframes
+      }
+    }
+  }, []);
 
   const [testers, setTesters] = useState<Tester[]>([]);
   const [claims, setClaims] = useState<CopyrightClaim[]>([]);
@@ -233,22 +274,52 @@ function AppContent() {
         <div className="absolute inset-0 bg-[radial-gradient(#2D292608_1px,transparent_1px)] [background-size:28px_28px] opacity-70" />
       </div>
 
-      {/* Navigation Header */}
-      <Navbar
-        activeTab={activeTab}
-        onSelectTab={handleTabChange}
-        totalStreamedUsd={summary.total_streamed_usd}
-        isBadgeActive={isBadgeActive}
-        onOpenOnboardModal={() => setIsOnboardModalOpen(true)}
-        onOpenStripeModal={() => setIsStripeModalOpen(true)}
-        onOpenCustomBadgeModal={() => setIsCustomBadgeModalOpen(true)}
-        onOpenColorStudio={() => setIsMasterColorStudioOpen(true)}
-        onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
-        onOpenOwnerAuthModal={() => setIsOwnerAuthModalOpen(true)}
-      />
+      {/* Navigation Header (hidden in ?embed=1 chromeless mode) */}
+      {!isEmbedMode && (
+        <Navbar
+          activeTab={activeTab}
+          onSelectTab={handleTabChange}
+          totalStreamedUsd={summary.total_streamed_usd}
+          isBadgeActive={isBadgeActive}
+          onOpenOnboardModal={() => setIsOnboardModalOpen(true)}
+          onOpenStripeModal={() => setIsStripeModalOpen(true)}
+          onOpenCustomBadgeModal={() => setIsCustomBadgeModalOpen(true)}
+          onOpenColorStudio={() => setIsMasterColorStudioOpen(true)}
+          onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
+          onOpenOwnerAuthModal={() => setIsOwnerAuthModalOpen(true)}
+        />
+      )}
 
       {/* Main Content Area */}
-      <main className="relative z-10 flex-1 mx-auto w-full max-w-7xl px-4 py-6 md:py-8">
+      <main className={`relative z-10 flex-1 mx-auto w-full max-w-7xl px-4 ${isEmbedMode ? 'py-4' : 'py-6 md:py-8'}`}>
+        {omegaReturnBanner && (
+          <div className={`mb-6 rounded-2xl border p-4 flex items-center justify-between gap-4 text-xs font-mono ${
+            omegaReturnBanner.status === 'success'
+              ? 'bg-[#EBF3ED] border-[#3D6E50]/40 text-[#2D2926]'
+              : 'bg-[#FAF0EC] border-[#EECDBC] text-[#8C2E24]'
+          }`}>
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-[#3D6E50]" />
+              {omegaReturnBanner.status === 'success' ? (
+                <span>
+                  <strong>Omega Direct-Rail Payment Confirmed:</strong> Tier <strong>{omegaReturnBanner.tier}</strong> activated (50% People&apos;s Covenant split routed to Pool A/B/C)
+                  {omegaReturnBanner.sessionId ? ` · Session ${omegaReturnBanner.sessionId}` : ''}.
+                </span>
+              ) : (
+                <span>
+                  <strong>Omega Checkout Cancelled:</strong> No charge occurred. You may resume Direct-Rail /pay settlement anytime.
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setOmegaReturnBanner(null)}
+              className="px-2 py-1 rounded hover:bg-black/5 font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-24 space-y-3">
             <RefreshCw className="w-8 h-8 text-[#5A5A40] animate-spin" />
@@ -326,10 +397,6 @@ function AppContent() {
               <MerchantStorePortal
                 onNavigateToInitiative={() => handleTabChange('initiative')}
               />
-            )}
-
-            {activeTab === 'hunter' && (
-              <HunterAuthGateway />
             )}
 
             {activeTab === 'portal' && (
@@ -416,53 +483,55 @@ function AppContent() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-[#E5E0D8] bg-[#F2ECE4] py-8 px-4 text-xs text-[#6A655C] font-mono space-y-6">
-        <div className="mx-auto max-w-7xl">
-          {/* Footer Verified Ethical Trust Badge */}
-          <FooterTrustBadge 
-            onOpenBadgeModal={() => setIsCustomBadgeModalOpen(true)}
-            onOpenPrivacyModal={() => setActiveTab('privacy')}
-            onNavigateToCopyright={() => handleTabChange('portal')}
-            onOpenOwnerAuth={() => setIsOwnerAuthModalOpen(true)}
-          />
-        </div>
-
-        <div className="mx-auto max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 pt-2 border-t border-[#E5E0D8]/60">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => handleTabChange('portal')}
-              className="text-left cursor-pointer hover:opacity-85 transition-opacity"
-              title="View Copyright Owner & Royalty Landing Page"
-            >
-              <HumanLogo size="sm" showText={true} />
-            </button>
-            <span className="text-[#D4CCC1] hidden sm:inline">|</span>
-            <span className="text-[#6A655C]">
-              Universal Micro-Royalty Initiative & Tester Console
-            </span>
-            <button
-              onClick={() => setActiveTab('privacy')}
-              className="text-[#5A5A40] hover:text-[#2D2926] hover:underline font-semibold ml-2 cursor-pointer"
-            >
-              Privacy Policy & PDF
-            </button>
+      {/* Footer (hidden in ?embed=1 chromeless mode) */}
+      {!isEmbedMode && (
+        <footer className="relative z-10 border-t border-[#E5E0D8] bg-[#F2ECE4] py-8 px-4 text-xs text-[#6A655C] font-mono space-y-6">
+          <div className="mx-auto max-w-7xl">
+            {/* Footer Verified Ethical Trust Badge */}
+            <FooterTrustBadge 
+              onOpenBadgeModal={() => setIsCustomBadgeModalOpen(true)}
+              onOpenPrivacyModal={() => setActiveTab('privacy')}
+              onNavigateToCopyright={() => handleTabChange('portal')}
+              onOpenOwnerAuth={() => setIsOwnerAuthModalOpen(true)}
+            />
           </div>
 
-          <div className="flex items-center gap-4 text-[#5A5A40] flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-[#EFE9DF] border border-[#DCD3C6]">
-              <Database className="w-3 h-3 text-[#5A5A40]" />
-              Firestore: {firestoreConnected === true ? <span className="text-[#3D6E50] font-semibold">Active & Synced</span> : firestoreConnected === false ? <span className="text-[#6A655C]">Local Cache / Ready</span> : <span className="text-[#6A655C]">Connecting...</span>}
-            </span>
-            <span>•</span>
-            <span className="font-medium text-[#2D2926]">Powering Ethical AI apps, And Paying the People</span>
-            <span>•</span>
-            <span className="text-[#5A5A40]">Strict OSPO 0-Copyleft Sandbox</span>
-            <span>•</span>
-            <span>Stripe Connect Protected</span>
+          <div className="mx-auto max-w-7xl flex flex-col md:flex-row items-center justify-between gap-4 pt-2 border-t border-[#E5E0D8]/60">
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => handleTabChange('portal')}
+                className="text-left cursor-pointer hover:opacity-85 transition-opacity"
+                title="View Copyright Owner & Royalty Landing Page"
+              >
+                <HumanLogo size="sm" showText={true} />
+              </button>
+              <span className="text-[#D4CCC1] hidden sm:inline">|</span>
+              <span className="text-[#6A655C]">
+                Universal Micro-Royalty Initiative &amp; Contributor Console
+              </span>
+              <button
+                onClick={() => setActiveTab('privacy')}
+                className="text-[#5A5A40] hover:text-[#2D2926] hover:underline font-semibold ml-2 cursor-pointer"
+              >
+                Privacy Policy &amp; PDF
+              </button>
+            </div>
+
+            <div className="flex items-center gap-4 text-[#5A5A40] flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] bg-[#EFE9DF] border border-[#DCD3C6]">
+                <Database className="w-3 h-3 text-[#5A5A40]" />
+                Firestore: {firestoreConnected === true ? <span className="text-[#3D6E50] font-semibold">Active &amp; Synced</span> : firestoreConnected === false ? <span className="text-[#6A655C]">Local Cache / Ready</span> : <span className="text-[#6A655C]">Connecting...</span>}
+              </span>
+              <span>•</span>
+              <span className="font-medium text-[#2D2926]">Powering Ethical AI apps, And Paying the People</span>
+              <span>•</span>
+              <span className="text-[#5A5A40]">Cleanroom v3.0.0</span>
+              <span>•</span>
+              <span>Omega Direct-Rail (/pay)</span>
+            </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
       {/* Global Modals */}
       <OnboardingModal
@@ -517,19 +586,21 @@ function AppContent() {
         onVerified={() => setIsOwnerAuthModalOpen(false)}
       />
 
-      {/* Hideable Side Menu Tool and Task Bar with Light/Dark Settings & Python SDK Console */}
-      <SideMenuTaskbar
-        onNavigateTab={(tab) => handleTabChange(tab)}
-        onOpenStripeModal={() => setIsStripeModalOpen(true)}
-        onOpenBadgeModal={() => setIsCustomBadgeModalOpen(true)}
-        onOpenOnboardModal={() => setIsOnboardModalOpen(true)}
-        onOpenUniversalThemeHub={() => setIsThemeHubModalOpen(true)}
-        onOpenMasterColorStudio={() => {
-          setMasterStudioInitialTab('colors');
-          setIsMasterColorStudioOpen(true);
-        }}
-        onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
-      />
+      {/* Hideable Side Menu Tool and Task Bar (hidden in ?embed=1 chromeless mode) */}
+      {!isEmbedMode && (
+        <SideMenuTaskbar
+          onNavigateTab={(tab) => handleTabChange(tab)}
+          onOpenStripeModal={() => setIsStripeModalOpen(true)}
+          onOpenBadgeModal={() => setIsCustomBadgeModalOpen(true)}
+          onOpenOnboardModal={() => setIsOnboardModalOpen(true)}
+          onOpenUniversalThemeHub={() => setIsThemeHubModalOpen(true)}
+          onOpenMasterColorStudio={() => {
+            setMasterStudioInitialTab('colors');
+            setIsMasterColorStudioOpen(true);
+          }}
+          onOpenGoogleDriveModal={() => setIsGoogleDriveModalOpen(true)}
+        />
+      )}
     </div>
   );
 }

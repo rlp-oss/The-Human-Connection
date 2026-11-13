@@ -32,8 +32,7 @@ import {
   Cpu,
   Coins,
   Radio,
-  Trophy,
-  Fingerprint
+  Trophy
 } from 'lucide-react';
 import { HumanLogo, HumanProtocolLogo } from './HumanLogo';
 import { TopUninvasiveTrustBadge } from './UninvasiveTrustBadge';
@@ -56,7 +55,6 @@ export type ActiveTab =
   | 'portal'
   | 'technical-ai'
   | 'crypto-valuation'
-  | 'hunter'
   | 'testers' 
   | 'claims' 
   | 'payouts'
@@ -179,9 +177,9 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     { 
       id: 'stripe-guide' as ActiveTab, 
-      label: 'Stripe Integration Guide', 
+      label: 'Omega Direct-Rail /pay Guide', 
       icon: CreditCard, 
-      badge: 'Webhook URL',
+      badge: 'Webhook & /pay',
       highlight: true,
       badgeColor: 'text-[#D67D5C]'
     },
@@ -193,14 +191,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       badgeColor: 'text-[#3D6E50]'
     },
     { 
-      id: 'hunter' as ActiveTab, 
-      label: 'Hunter Guild (Treasure Hunt)', 
-      icon: Fingerprint, 
-      badge: '15 Chapters',
-      highlight: true,
-      badgeColor: 'text-[#10B981]'
-    },
-    { 
       id: 'portal' as ActiveTab, 
       label: 'Copyright Owner Portal (Site)', 
       icon: ShieldCheck, 
@@ -209,7 +199,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     },
     { id: 'testers' as ActiveTab, label: 'Tester CRM & Onboarding', icon: Users, badge: '5 Active' },
     { id: 'claims' as ActiveTab, label: 'Copyright Claims & Pool', icon: ShieldCheck, badge: 'Pool Live' },
-    { id: 'payouts' as ActiveTab, label: 'Creator Payouts & Stripe', icon: Landmark, badge: 'Direct Connect' },
+    { id: 'payouts' as ActiveTab, label: 'Creator Payouts & Covenant', icon: Landmark, badge: 'Omega Direct-Rail' },
     { id: 'personas' as ActiveTab, label: "Dragons' Den & Personas", icon: Users2, badge: '5 Dragons' },
     { 
       id: 'badge' as ActiveTab, 
@@ -250,7 +240,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
             <span className="hidden lg:inline text-[#B8ADA0] dark:text-[#1E3A33]">|</span>
             <span className="hidden lg:inline text-[#6A655C] dark:text-[#94A3B8] font-mono text-[11px]">
-              4 Connected Apps • 50% Subscription Restitution Pool
+              5 Connected Apps • 50% People&apos;s Covenant • v3.0.0-cleanroom
             </span>
           </div>
 
@@ -334,10 +324,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               onClick={onOpenStripeModal}
               className="hidden md:flex items-center gap-1 text-[11px] font-mono text-[#5A5A40] dark:text-[#A7F3D0] hover:text-[#2D2926] transition-colors bg-[#FFFFFF] dark:bg-[#142320] hover:bg-[#F2ECE4] dark:hover:bg-[#1E3A33] px-2.5 py-1 rounded-lg border border-[#DCD5CA] dark:border-[#1E3A33] shadow-2xs"
-              title="Stripe Sandbox Settings & Environment Secrets"
+              title="Omega Direct-Rail /pay & Signed Webhook Settings"
             >
               <Lock className="w-3 h-3 text-[#059669] dark:text-[#34D399]" />
-              <span>Sandbox</span>
+              <span>Omega /pay</span>
             </button>
           </div>
         </div>

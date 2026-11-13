@@ -96,6 +96,41 @@ export async function createC2paManifestRecord(
   };
 }
 
+import {
+  SDK_VERSION,
+  C2PA_ATTESTATION_STANDARDS,
+  DEFAULT_CORRIDOR,
+  signArtifactC2pa,
+  syncDeliverableToOmega,
+} from '../sdk/cleanroomSdk';
+import type { C2paArtifactManifest, OmegaDeliverableSyncResponse } from '../sdk/cleanroomSdk';
+
+export { SDK_VERSION, C2PA_ATTESTATION_STANDARDS, DEFAULT_CORRIDOR };
+export type { C2paArtifactManifest, OmegaDeliverableSyncResponse };
+
+export async function signAndSyncDeliverable(
+  payload: unknown,
+  options?: {
+    appId?: string;
+    title?: string;
+    artifactType?: string;
+    corridor?: string;
+    grossUsd?: number;
+  }
+): Promise<OmegaDeliverableSyncResponse> {
+  return syncDeliverableToOmega(payload, {
+    ...options,
+    corridor: options?.corridor || DEFAULT_CORRIDOR,
+  });
+}
+
+export async function createCleanroomManifest(
+  payload: unknown,
+  options?: { appId?: string; title?: string; artifactType?: string; corridor?: string }
+): Promise<C2paArtifactManifest> {
+  return signArtifactC2pa(payload, options);
+}
+
 /**
  * Validates whether an incoming asset is safe for model citation or must be quarantined.
  */
@@ -127,6 +162,7 @@ export async function quarantineCheck(
 
   return {
     passed: true,
-    reason: 'Verified human origin under 50% restitution covenant.'
+    reason: 'Verified human origin under 50% People\'s Covenant (Pool A/B/C).'
   };
 }
+

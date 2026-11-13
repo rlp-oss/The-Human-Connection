@@ -698,7 +698,7 @@ export default function App() {
                       }`}>
                         <span>{customBadge?.appName || 'Tome Crafter'}</span>
                         <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#EBF3ED] text-[#3D6E50] border border-[#C5DEC9]">
-                          {customBadge?.covenantPct || 40}% Fund Verified
+                          {customBadge?.covenantPct || 50}% Fund Verified
                         </span>
                       </div>
                       <div className={`text-[10px] font-mono ${

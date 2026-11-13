@@ -687,185 +687,136 @@ export function generateWebComponentEmbedCode(config: DeveloperEmbedConfig): str
 
 export function generateStripeSplitNodeCode(appId: string, splitPct: number): string {
   return `/**
- * Node.js / Express Webhook Handler for 50% H.U.M.A.N Fund Routing
- * Automatically transfers 50% of every subscription invoice to the Global H.U.M.A.N Fund.
+ * Node.js 22 Native Type-Stripping Express Webhook Handler for ${splitPct}% People's Covenant
+ * Verifies X-Omega-Signature and computes Pool A (70%), Pool B (15%), Pool C (15%).
  */
 import express from 'express';
-import Stripe from 'stripe';
+import type { Request, Response } from 'express';
+import crypto from 'node:crypto';
+import { computeCovenantSplitCents } from './src/sdk/cleanroomSdk.ts';
 
 const app = express();
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
-const HUMAN_FUND_STRIPE_ACCOUNT = 'acct_1NzkEthicalGlobalHumanFund99x';
-const SPLIT_RATIO = ${splitPct / 100}; // ${splitPct}% of gross
 
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'] as string;
-  let event: Stripe.Event;
+app.post('/api/omega/webhook', express.raw({ type: 'application/json' }), async (req: Request, res: Response) => {
+  const sigHeader = String(req.headers['x-omega-signature'] || '');
+  const secret = process.env.OMEGA_GATEWAY_SECRET || '';
+  const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+  const expected = 'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
 
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch (err: any) {
-    return res.status(400).send(\`Webhook Signature Error: \${err.message}\`);
+  if (!secret || sigHeader.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(sigHeader), Buffer.from(expected))) {
+    return res.status(401).json({ error: 'Invalid X-Omega-Signature' });
   }
 
-  // Handle successful customer subscription charge
-  if (event.type === 'invoice.payment_succeeded') {
-    const invoice = event.data.object as Stripe.Invoice;
-    const amountPaidInCents = invoice.amount_paid; // e.g. $39.00 -> 3900 cents
-    
+  const event = JSON.parse(rawBody.toString('utf8'));
+  if (event.type === 'omega.payment.completed') {
+    const amountPaidInCents = Number(event.data?.amount_cents || 0);
     if (amountPaidInCents > 0) {
-      const humanFundShareCents = Math.round(amountPaidInCents * SPLIT_RATIO);
-      
-      // Execute instantaneous programmatic transfer to H.U.M.A.N Fund
-      const transfer = await stripe.transfers.create({
-        amount: humanFundShareCents,
-        currency: invoice.currency,
-        destination: HUMAN_FUND_STRIPE_ACCOUNT,
-        description: \`H.U.M.A.N Fund Split for ${appId} - Invoice \${invoice.id}\`,
-        metadata: {
-          app_id: '${appId}',
-          split_percentage: '${splitPct}%',
-          target_urgency_pool: 'Tier 1 Food & Medical Baseline',
-          c2pa_verified: 'true'
-        }
-      });
-
-      console.log(\`✅ Routed \${humanFundShareCents / 100} \${invoice.currency.toUpperCase()} to H.U.M.A.N Fund (Transfer: \${transfer.id})\`);
+      const split = computeCovenantSplitCents(amountPaidInCents);
+      console.log(\`Routed \${split.societyFundCents} cents for ${appId} across Pool A/B/C\`, split);
     }
   }
 
-  res.json({ received: true });
+  return res.json({ received: true });
 });
 `;
 }
 
 export function generateFlaskPythonWebhookCode(appId: string, subscribersCount: number = 15000, founderFloor: number = 25000): string {
   return `from flask import Flask, jsonify, request
+import hmac
+import hashlib
 import os
-import stripe
-from engine import HumanInitiativeEngine
 
 app = Flask(__name__)
 
-# Initialize Stripe with your API keys (stored securely in environment variables)
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY", "sk_test_mockkey")
-ENDPOINT_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "whsec_mocksecret")
+# Server-side HMAC secret configured via environment variables (never exposed to browser)
+OMEGA_GATEWAY_SECRET = os.environ.get("OMEGA_GATEWAY_SECRET", "")
+OMEGA_APP_URL = os.environ.get("OMEGA_APP_URL", "https://human-initiative-omega-799079571356.us-west1.run.app")
 
-# Configuration for The Human Initiative
-FOUNDER_OPERATIONAL_FLOOR_MONTHLY = ${founderFloor.toFixed(2)}  # Secures your servers, legal, and operational baseline off the top
-CURRENT_ACTIVE_SUBSCRIBERS = ${subscribersCount}             # Dynamic subscriber count feeding the sliding scale
+@app.route("/api/omega/webhook", methods=["POST"])
+def omega_webhook():
+    raw_body = request.data
+    sig_header = request.headers.get("X-Omega-Signature", "")
+    expected_sig = "sha256=" + hmac.new(
+        OMEGA_GATEWAY_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
 
-@app.route("/stripe/webhook", methods=["POST"])
-def stripe_webhook():
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature")
+    if not hmac.compare_digest(sig_header, expected_sig):
+        return jsonify({"ok": False, "error": "Invalid X-Omega-Signature"}), 401
 
-    try:
-        # Secure cryptographic signature validation to prevent spoofing or tampering
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, ENDPOINT_SECRET
-        )
-    except ValueError as e:
-        # Invalid payload
-        return jsonify({"error": "Invalid payload"}), 400
-    except stripe.error.SignatureVerificationError as e:
-        # Invalid signature
-        return jsonify({"error": "Invalid signature"}), 400
+    event = request.get_json(silent=True) or {}
+    if event.get("type") == "omega.payment.completed":
+        data = event.get("data", {})
+        gross_cents = int(data.get("amount_cents", 0))
+        ops_cents = round(gross_cents * 0.50)
+        society_cents = gross_cents - ops_cents
+        pool_a = round(society_cents * 0.70)   # 35% of gross
+        pool_b = round(society_cents * 0.15)   # 7.5% of gross
+        pool_c = society_cents - pool_a - pool_b  # 7.5% Global Pool C ($FOOD / $MED)
+        print(f"[OMEGA 50% COVENANT] App=${appId} PoolA={pool_a} PoolB={pool_b} PoolC={pool_c}")
 
-    # Listen for successful subscription or invoice payment events across your 4 apps
-    if event["type"] == "invoice.payment_succeeded":
-        invoice = event["data"]["object"]
-        customer_email = invoice.get("customer_email")
-        amount_paid = invoice.get("amount_paid", 0) / 100.00  # Convert cents to dollars
-        app_source = invoice.get("metadata", {}).get("app_source", "${appId}")
-
-        print(f"[INFLOW RECEIVED] App: {app_source} | Customer: {customer_email} | Amount: \\\${amount_paid:.2f}")
-
-        # Execute The Human Initiative Financial Engine
-        try:
-            engine = HumanInitiativeEngine(active_subscribers=CURRENT_ACTIVE_SUBSCRIBERS)
-            distribution_report = engine.process_revenue_distribution(
-                founder_operational_floor=FOUNDER_OPERATIONAL_FLOOR_MONTHLY
-            )
-
-            # Log execution success (In production, this writes directly to your ledger database)
-            print("=== HEARTBEAT DISTRIBUTION EXECUTED ===")
-            print(f"Founder Floor Secured: \\\${distribution_report['Founder_Operational_Floor']:,.2f}")
-            print(f"Community Impact Pool Funded: \\\${distribution_report['Net_Community_Pool']:,.2f}")
-
-        except Exception as engine_error:
-            print(f"[ENGINE ERROR] Failed to process distribution: {str(engine_error)}")
-            return jsonify({"status": "error", "message": str(engine_error)}), 500
-
-    # Return a rapid 200 OK to Stripe to acknowledge receipt (< 10 seconds requirement)
-    return jsonify({"status": "success", "processed": True}), 200
-
-if __name__ == "__main__":
-    # Run the gateway locally on port 4242 (standard for Stripe CLI forwarding)
-    app.run(port=4242, debug=True)
+    return jsonify({"received": True, "ok": True}), 200
 `;
 }
 
-export function generateFastApiPythonSplitCode(appId: string, splitPct: number): string {
+export function generateFastApiPythonSplitCode(appId: string, splitPct: number = 50): string {
   return `"""
-FastAPI / Python Webhook Router for Automated H.U.M.A.N Heartbeat Routing
+FastAPI / Python Cleanroom Router for Omega Protocol v3.0.0-cleanroom (${splitPct}% People's Covenant)
 """
 import os
-import stripe
+import hmac
+import hashlib
 from fastapi import FastAPI, Request, HTTPException, Header
 
 app = FastAPI()
-stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
-WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-HUMAN_FUND_ACCOUNT = "acct_1NzkEthicalGlobalHumanFund99x"
-SPLIT_RATIO = ${splitPct / 100}  # ${splitPct}% Baseline
+OMEGA_GATEWAY_SECRET = os.getenv("OMEGA_GATEWAY_SECRET", "")
 
-@app.post("/api/stripe/webhook")
-async def stripe_webhook(request: Request, stripe_signature: str = Header(None)):
-    payload = await request.body()
-    try:
-        event = stripe.Webhook.construct_event(payload, stripe_signature, WEBHOOK_SECRET)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+@app.post("/api/omega/webhook")
+async def omega_webhook(request: Request, x_omega_signature: str = Header(None)):
+    raw_body = await request.body()
+    expected = "sha256=" + hmac.new(
+        OMEGA_GATEWAY_SECRET.encode("utf-8"),
+        raw_body,
+        hashlib.sha256
+    ).hexdigest()
+    if not x_omega_signature or not hmac.compare_digest(x_omega_signature, expected):
+        raise HTTPException(status_code=401, detail="Invalid X-Omega-Signature")
 
-    if event["type"] == "invoice.payment_succeeded":
-        invoice = event["data"]["object"]
-        amount_paid = invoice["amount_paid"]
-        
-        if amount_paid > 0:
-            human_share = int(amount_paid * SPLIT_RATIO)
-            transfer = stripe.Transfer.create(
-                amount=human_share,
-                currency=invoice["currency"],
-                destination=HUMAN_FUND_ACCOUNT,
-                description=f"H.U.M.A.N Split for ${appId} - Invoice {invoice['id']}",
-                metadata={
-                    "app_id": "${appId}",
-                    "split_pct": "${splitPct}%",
-                    "pool": "Survival and Emergency Health"
-                }
-            )
-            print(f"✅ Routed \${human_share/100:.2f} to H.U.M.A.N Fund: {transfer.id}")
+    payload = await request.json()
+    if payload.get("type") == "omega.payment.completed":
+        gross_cents = int(payload.get("data", {}).get("amount_cents", 0))
+        society_fund = gross_cents - round(gross_cents * 0.50)
+        print(f"[OMEGA] App=${appId} 50% Covenant Fund: {society_fund} cents")
 
-    return {"status": "success"}
+    return {"received": True, "ok": True}
 `;
 }
 
-export function generateInitiativeClientPythonCode(appSource: string = "ForgeOS App Builder"): string {
-  return `from human_initiative import InitiativeClient
+export function generateInitiativeClientPythonCode(appSource: string = "forge-os"): string {
+  return `import os
+import requests
 
-# Initialize with your application credentials and app source tag
-client = InitiativeClient(
-    api_key="hi_live_sec_your_token_here",
-    app_source="${appSource}"
+# Initialize using your server-side OMEGA_APP_URL (no client API keys required)
+OMEGA_APP_URL = os.environ.get(
+    "OMEGA_APP_URL",
+    "https://human-initiative-omega-799079571356.us-west1.run.app"
 )
 
-# Triggered when a subscriber successfully pays their monthly invoice
-def handle_successful_payment(customer_email: str, amount_in_cents: int):
-    distribution = client.process_inflow(
-        email=customer_email,
-        amount=amount_in_cents
-    )
-    print(f"Successfully routed \${distribution['net_community_pool']} to The Human Initiative pools.")
+def sync_c2pa_deliverable(sha256_hash: str, title: str):
+    return requests.post(
+        f"{OMEGA_APP_URL}/api/fleet/${appSource}/records",
+        json={
+            "appId": "${appSource}",
+            "corridor": "Global Pool C ($FOOD / $MED)",
+            "standards": ["C2PA-JUMBF-v2.1", "EU-AI-ACT-ART-50-53"],
+            "sha256": sha256_hash,
+            "title": title,
+        },
+        timeout=10,
+    ).json()
 `;
 }
+

@@ -115,7 +115,7 @@ const INITIAL_APPS: AppIntegrationHealthItem[] = [
     name: 'RLM Pro Studio',
     appId: 'rlm-pro-studio',
     vertical: 'Hybrid Audio Production Suite',
-    appUrl: 'https://remix-lyria-studio-5954.ai.studio',
+    appUrl: 'https://rlm-pro-studio.ai.studio',
     iconType: 'music',
     healthScore: 100,
     status: 'Optimal',
@@ -192,6 +192,62 @@ const INITIAL_APPS: AppIntegrationHealthItem[] = [
       totalInferences: '14,250 video scenes synthesized',
       royaltiesStreamedUsd: 2180.50,
       creatorsAttributed: 286,
+    }
+  },
+  {
+    id: 'app_omega_05',
+    name: 'Omega App',
+    appId: 'omega-app',
+    vertical: 'Sovereign Hub & Cleanroom Coordination Engine',
+    appUrl: 'https://human-initiative-omega-799079571356.us-west1.run.app',
+    iconType: 'code',
+    healthScore: 100,
+    status: 'Optimal',
+    activationState: 'ACTIVE',
+    c2paHash: '0x71cc8920aa41f009de239012cb88410ad719ec120411a',
+    ftAuditId: 'FT-ETHIC-OMEGA-CORE-2026',
+    storyIpId: '0x77aa...omega',
+    royaltyBalance: 0.00,
+    lastAudited: '2026-08-18 22:00 UTC',
+    checkpoints: {
+      cleanroomCertified: true,
+      c2paJumbfBound: true,
+      royaltyFunded: true,
+      personhoodVerified: true,
+      regulatoryCompliant: true,
+    },
+    metrics: {
+      totalInferences: 'Sovereign /pay rail & cleanroom coordinator',
+      royaltiesStreamedUsd: 0.00,
+      creatorsAttributed: 0,
+    }
+  },
+  {
+    id: 'app_rlmv_06',
+    name: 'RLMV Music Video Editor',
+    appId: 'rlmv-editor',
+    vertical: 'AI Music Video & Timeline Synthesis Studio',
+    appUrl: '',
+    iconType: 'video',
+    healthScore: 100,
+    status: 'Unlinked',
+    activationState: 'PENDING',
+    c2paHash: '0x54de9012bb87c341aa092817fe44190bd912ea880312c',
+    ftAuditId: 'FT-ETHIC-RLMV-VIDEO-2026',
+    storyIpId: '0x66cd...rlmv',
+    royaltyBalance: 0.00,
+    lastAudited: 'Pending deployment',
+    checkpoints: {
+      cleanroomCertified: true,
+      c2paJumbfBound: true,
+      royaltyFunded: true,
+      personhoodVerified: true,
+      regulatoryCompliant: true,
+    },
+    metrics: {
+      totalInferences: 'Pending cloud URL assignment',
+      royaltiesStreamedUsd: 0.00,
+      creatorsAttributed: 0,
     }
   },
 ];
@@ -1168,7 +1224,7 @@ export async function finalizeVideoExport(videoBuffer, metadata) {
                 <span className="text-[11px] font-mono text-[#6A655C]">
                   Audit ID: <code className="text-[#5A5A40]">{activeModalApp.ftAuditId}</code>
                 </span>
-                {!['app_pub_01', 'app_rlm_02', 'app_bld_03', 'app_vid_04'].includes(activeModalApp.id) && (
+                {!['app_pub_01', 'app_rlm_02', 'app_bld_03', 'app_vid_04', 'app_omega_05', 'app_rlmv_06'].includes(activeModalApp.id) && (
                   <button
                     type="button"
                     onClick={() => handleDeleteApp(activeModalApp)}

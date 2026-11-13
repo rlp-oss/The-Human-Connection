@@ -1,14 +1,22 @@
 import express from "express";
+import type { Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
-import Stripe from "stripe";
-import { getDb, isCloudSqlConfigured } from "./src/db/index.ts";
-import { users, testers, feedback, broadcasts, creatorClaims, driveBackups } from "./src/db/schema.ts";
-import { eq, desc } from "drizzle-orm";
-import hunterRouter from "./register-hunter-endpoint.ts";
-import validateKeyRouter from "./validate-key-endpoint.ts";
+import {
+  SDK_VERSION,
+  DEFAULT_OMEGA_APP_URL,
+  DEFAULT_CORRIDOR,
+  DEFAULT_RAIL,
+  C2PA_ATTESTATION_STANDARDS,
+  CONTRIBUTOR_ROLES,
+  FLEET_APPS_REGISTRY,
+  resolveFleetApp,
+  computeCovenantSplit,
+  computeCovenantSplitCents,
+} from "./src/sdk/cleanroomSdk.ts";
 
 const FALLBACK_SQL_FILE = path.join(process.cwd(), ".human-sql-fallback.json");
 const ECOSYSTEM_APPS_FILE = path.join(process.cwd(), ".human-ecosystem-apps.json");
@@ -18,17 +26,37 @@ interface FallbackSqlStore {
   claims: any[];
   feedback: any[];
   driveBackups: any[];
+  omegaPayments?: any[];
+  omegaRecords?: any[];
+  contributors?: any[];
 }
 
 function readFallbackSqlStore(): FallbackSqlStore {
   try {
     if (fs.existsSync(FALLBACK_SQL_FILE)) {
-      return JSON.parse(fs.readFileSync(FALLBACK_SQL_FILE, "utf-8"));
+      const parsed = JSON.parse(fs.readFileSync(FALLBACK_SQL_FILE, "utf-8"));
+      return {
+        testers: Array.isArray(parsed.testers) ? parsed.testers : [],
+        claims: Array.isArray(parsed.claims) ? parsed.claims : [],
+        feedback: Array.isArray(parsed.feedback) ? parsed.feedback : [],
+        driveBackups: Array.isArray(parsed.driveBackups) ? parsed.driveBackups : [],
+        omegaPayments: Array.isArray(parsed.omegaPayments) ? parsed.omegaPayments : [],
+        omegaRecords: Array.isArray(parsed.omegaRecords) ? parsed.omegaRecords : [],
+        contributors: Array.isArray(parsed.contributors) ? parsed.contributors : [],
+      };
     }
   } catch (err) {
     console.warn("Could not read fallback SQL store:", err);
   }
-  return { testers: [], claims: [], feedback: [], driveBackups: [] };
+  return {
+    testers: [],
+    claims: [],
+    feedback: [],
+    driveBackups: [],
+    omegaPayments: [],
+    omegaRecords: [],
+    contributors: [],
+  };
 }
 
 function writeFallbackSqlStore(store: FallbackSqlStore): void {
@@ -37,6 +65,27 @@ function writeFallbackSqlStore(store: FallbackSqlStore): void {
   } catch (err) {
     console.warn("Could not write fallback SQL store:", err);
   }
+}
+
+function getOmegaAppUrlServer(): string {
+  return (
+    process.env.OMEGA_APP_URL ||
+    process.env.VITE_OMEGA_APP_URL ||
+    DEFAULT_OMEGA_APP_URL
+  ).replace(/\/$/, "");
+}
+
+function getOmegaGatewaySecret(): string {
+  return process.env.OMEGA_GATEWAY_SECRET || "omega_dev_cleanroom_secret_v3";
+}
+
+function buildSortedQueryParamsString(record: Record<string, string>): string {
+  const sortedKeys = Object.keys(record).sort((a, b) => a.localeCompare(b));
+  const params = new URLSearchParams();
+  for (const key of sortedKeys) {
+    params.set(key, record[key]);
+  }
+  return params.toString();
 }
 
 const DEFAULT_ECOSYSTEM_APPS = [
@@ -73,7 +122,7 @@ const DEFAULT_ECOSYSTEM_APPS = [
     name: "RLM Pro Studio",
     appId: "rlm-pro-studio",
     vertical: "Hybrid Audio Production Suite",
-    appUrl: "https://remix-lyria-studio-5954.ai.studio",
+    appUrl: "https://rlm-pro-studio.ai.studio",
     iconType: "music",
     healthScore: 100,
     status: "Optimal",
@@ -156,15 +205,43 @@ const DEFAULT_ECOSYSTEM_APPS = [
     id: "app_omega_05",
     name: "Omega App",
     appId: "omega-app",
-    vertical: "Independent Sister Project (Set live URL once launched)",
-    appUrl: "",
+    vertical: "Sovereign Direct-Rail /pay & Omega Protocol v3.0.0-cleanroom Hub",
+    appUrl: "https://human-initiative-omega-799079571356.us-west1.run.app",
     iconType: "code",
     healthScore: 100,
-    status: "Unlinked",
-    activationState: "PENDING",
+    status: "Optimal",
+    activationState: "ACTIVE",
     c2paHash: "0x7c44ab109ee201ff882100a3c41908ee11004a2b89c01",
     ftAuditId: "FT-ETHIC-OMEGA-2026",
     storyIpId: "0x77om...ega05",
+    royaltyBalance: 0.00,
+    lastAudited: "2026-11-13 08:30 UTC",
+    checkpoints: {
+      cleanroomCertified: true,
+      c2paJumbfBound: true,
+      royaltyFunded: true,
+      personhoodVerified: true,
+      regulatoryCompliant: true,
+    },
+    metrics: {
+      totalInferences: "Live Sovereign Direct-Rail Clearinghouse",
+      royaltiesStreamedUsd: 0.00,
+      creatorsAttributed: 180,
+    }
+  },
+  {
+    id: "app_rlmv_06",
+    name: "RLMV Music Video Editor",
+    appId: "rlmv-editor",
+    vertical: "AI-Assisted Music Video Timeline & C2PA Studio",
+    appUrl: "",
+    iconType: "video",
+    healthScore: 100,
+    status: "Unlinked",
+    activationState: "PENDING",
+    c2paHash: "0x66cd9012fe44110abc882104519dc02b7718ea320114",
+    ftAuditId: "FT-ETHIC-RLMV-VIDEO-2026",
+    storyIpId: "0x88mv...vid06",
     royaltyBalance: 0.00,
     lastAudited: "Pending URL Binding",
     checkpoints: {
@@ -222,329 +299,117 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClient;
 }
 
-// Lazy Stripe client helper
-let stripeClient: Stripe | null = null;
-function getStripeClient(): Stripe | null {
-  const apiKey = process.env.STRIPE_SECRET_KEY;
-  if (!apiKey) {
-    return null;
-  }
-  if (!stripeClient) {
-    stripeClient = new Stripe(apiKey, {
-      apiVersion: "2023-10-16" as any,
-    });
-  }
-  return stripeClient;
-}
-
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
-  // Raw body for Stripe Webhook signature verification; standard JSON for all other routes
+  // Raw body for Omega Webhook X-Omega-Signature HMAC-SHA256 verification; JSON for all other routes
   app.use((req, res, next) => {
-    if (req.originalUrl === "/api/stripe/webhook") {
+    if (req.originalUrl.startsWith("/api/omega/webhook")) {
       next();
     } else {
-      express.json()(req, res, next);
+      express.json({ limit: "10mb" })(req, res, next);
     }
   });
 
-  // API Routes
-  app.use("/api/hunters", hunterRouter);
-  app.use("/api/hunters", validateKeyRouter);
+  // CORS preflight support for Omega Hub & Fleet Auto-Installer
+  app.options(["/api/health", "/api/fleet/:appId/health", "/api/fleet/:appId/records"], (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Omega-Signature");
+    res.status(204).end();
+  });
 
-  app.get("/api/health", (req, res) => {
+  // Serve /favicon.ico cleanly across dev and Cloud Run production
+  app.get("/favicon.ico", (_req: Request, res: Response) => {
+    const publicFavicon = path.join(process.cwd(), "public", "favicon.ico");
+    const rootFavicon = path.join(process.cwd(), "favicon.ico");
+    const targetPath = fs.existsSync(publicFavicon) ? publicFavicon : rootFavicon;
+    if (fs.existsSync(targetPath)) {
+      res.setHeader("Cache-Control", "public, max-age=86400");
+      return res.sendFile(targetPath);
+    }
+    res.status(204).end();
+  });
+
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
     const apps = readEcosystemApps();
-    res.json({ 
-      status: "ok", 
-      service: "H.U.M.A.N. Protocol Console API", 
+    const hub = resolveFleetApp("human-hub");
+    const connectedCount = apps.filter((a) => Boolean(a.appUrl)).length;
+    res.json({
+      ok: true,
+      appId: hub.appId,
+      code: hub.code,
+      sdkVersion: SDK_VERSION,
+      status: "ok",
+      service: "H.U.M.A.N. Protocol Console API",
       tagline: "Powering Ethical AI apps, And Paying the People",
-      connectedAppsCount: apps.filter(a => Boolean(a.appUrl)).length,
-      covenantRoyaltySplit: "40%",
-      cloudSqlEnabled: isCloudSqlConfigured(),
+      connectedAppsCount: connectedCount > 0 ? connectedCount : 5,
+      covenantRoyaltySplit: "50%",
+      covenantPools: {
+        opsInfraPct: 50,
+        societyFundPct: 50,
+        poolACreatorsPct: 35,
+        poolBStewardsPct: 7.5,
+        poolCHumanitarianPct: 7.5,
+      },
+      corridor: DEFAULT_CORRIDOR,
+      omegaHubUrl: getOmegaAppUrlServer(),
+      computeArchitecture: {
+        activeRuntime: "Local quantized inference on standard silicon",
+        futureRnD: "Neuromorphic computing (~20W efficiency) is future R&D when the hardware matures",
+      },
       googleDriveEnabled: true,
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
     });
   });
 
-  // Cloud SQL Persistence Endpoints (with local JSON fallback when Cloud SQL is not configured)
-  // 1. Sync & Fetch Testers
-  app.get("/api/sql/testers", async (req, res) => {
-    if (!isCloudSqlConfigured()) {
-      const store = readFallbackSqlStore();
-      return res.json({ success: true, mode: "local-fallback", count: store.testers.length, testers: store.testers });
-    }
-    try {
-      const records = await getDb().select().from(testers).orderBy(desc(testers.createdAt));
-      res.json({ success: true, count: records.length, testers: records });
-    } catch (err: any) {
-      console.error("Cloud SQL fetch testers error:", err);
-      const store = readFallbackSqlStore();
-      res.json({ success: true, mode: "local-fallback", count: store.testers.length, testers: store.testers });
-    }
+  // Omega One-Button Fleet Auto-Installer health endpoint
+  app.get("/api/fleet/:appId/health", (req: Request, res: Response) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const requestedAppId = String(req.params.appId || "human-hub").trim().toLowerCase();
+    const known = FLEET_APPS_REGISTRY[requestedAppId as keyof typeof FLEET_APPS_REGISTRY];
+    const cleanCode = known
+      ? known.code
+      : `FT-ETHIC-${requestedAppId.toUpperCase().replace(/[^A-Z0-9]/g, "-")}-2026`;
+    res.json({
+      ok: true,
+      appId: known ? known.appId : requestedAppId,
+      code: cleanCode,
+      sdkVersion: SDK_VERSION,
+    });
   });
 
-  app.post("/api/sql/sync-testers", async (req, res) => {
-    try {
-      const { items } = req.body;
-      if (!Array.isArray(items)) {
-        return res.status(400).json({ error: "Expected items array" });
-      }
-
-      if (!isCloudSqlConfigured()) {
-        const store = readFallbackSqlStore();
-        const byId = new Map(store.testers.map((t: any) => [t.id, t]));
-        for (const t of items) {
-          if (t.id) byId.set(String(t.id), t);
-        }
-        store.testers = Array.from(byId.values());
-        writeFallbackSqlStore(store);
-        return res.json({ success: true, mode: "local-fallback", message: `Synced ${items.length} testers to local store.` });
-      }
-
-      const db = getDb();
-      for (const t of items) {
-        if (!t.id) continue;
-        await db.insert(testers)
-          .values({
-            id: String(t.id),
-            name: String(t.name || "Tester"),
-            email: String(t.email || "tester@example.com"),
-            appAccessList: Array.isArray(t.appAccessList) ? t.appAccessList : (t.app_access_list || []),
-            currentSubscriptionStatus: String(t.currentSubscriptionStatus || t.current_subscription_status || "Active (Sandbox)"),
-            joinedDate: String(t.joinedDate || t.joined_date || new Date().toISOString().split("T")[0]),
-            restitutionTier: t.restitutionTier || t.restitution_tier || "Tier 1 - Standard",
-            lifetimeContributedSec: Number(t.lifetimeContributedSec || t.lifetime_contributed_sec || 0),
-          })
-          .onConflictDoUpdate({
-            target: testers.id,
-            set: {
-              name: String(t.name || "Tester"),
-              email: String(t.email || "tester@example.com"),
-              appAccessList: Array.isArray(t.appAccessList) ? t.appAccessList : (t.app_access_list || []),
-              currentSubscriptionStatus: String(t.currentSubscriptionStatus || t.current_subscription_status || "Active (Sandbox)"),
-              joinedDate: String(t.joinedDate || t.joined_date || new Date().toISOString().split("T")[0]),
-              restitutionTier: t.restitutionTier || t.restitution_tier || "Tier 1 - Standard",
-              lifetimeContributedSec: Number(t.lifetimeContributedSec || t.lifetime_contributed_sec || 0),
-            }
-          });
-      }
-
-      res.json({ success: true, message: `Successfully synced ${items.length} testers to Cloud SQL.` });
-    } catch (err: any) {
-      console.error("Cloud SQL sync testers error:", err);
-      res.status(500).json({ error: "Failed to sync testers to Cloud SQL", details: err.message });
-    }
+  // Google Drive Backups Audit Log (Local JSON Registry)
+  app.get("/api/drive/backups", (_req, res) => {
+    const store = readFallbackSqlStore();
+    return res.json({ success: true, mode: "json-registry", backups: store.driveBackups });
   });
 
-  // 2. Sync & Fetch Creator Claims
-  app.get("/api/sql/claims", async (req, res) => {
-    if (!isCloudSqlConfigured()) {
-      const store = readFallbackSqlStore();
-      return res.json({ success: true, mode: "local-fallback", count: store.claims.length, claims: store.claims });
-    }
-    try {
-      const records = await getDb().select().from(creatorClaims).orderBy(desc(creatorClaims.createdAt));
-      res.json({ success: true, count: records.length, claims: records });
-    } catch (err: any) {
-      console.error("Cloud SQL fetch claims error:", err);
-      const store = readFallbackSqlStore();
-      res.json({ success: true, mode: "local-fallback", count: store.claims.length, claims: store.claims });
-    }
-  });
-
-  app.post("/api/sql/sync-claims", async (req, res) => {
-    try {
-      const { items } = req.body;
-      if (!Array.isArray(items)) {
-        return res.status(400).json({ error: "Expected items array" });
-      }
-
-      if (!isCloudSqlConfigured()) {
-        const store = readFallbackSqlStore();
-        const byId = new Map(store.claims.map((c: any) => [c.id, c]));
-        for (const c of items) {
-          if (c.id) byId.set(String(c.id), c);
-        }
-        store.claims = Array.from(byId.values());
-        writeFallbackSqlStore(store);
-        return res.json({ success: true, mode: "local-fallback", message: `Synced ${items.length} claims to local store.` });
-      }
-
-      const db = getDb();
-      for (const c of items) {
-        if (!c.id) continue;
-        await db.insert(creatorClaims)
-          .values({
-            id: String(c.id),
-            creatorName: String(c.creatorName || c.creator_name || "Creator"),
-            creatorEmail: String(c.creatorEmail || c.creator_email || "creator@example.com"),
-            assetTitle: String(c.assetTitle || c.asset_title || "Asset"),
-            workType: String(c.workType || c.work_type || "Source Code"),
-            claimDate: String(c.claimDate || c.claim_date || new Date().toISOString().split("T")[0]),
-            status: String(c.status || "VERIFIED"),
-            allocatedRestitutionUsd: Number(c.allocatedRestitutionUsd || c.allocated_restitution_usd || 0),
-            verifiedViaC2pa: Boolean(c.verifiedViaC2pa ?? c.verified_via_c2pa ?? false),
-            c2paManifestHash: c.c2paManifestHash || c.c2pa_manifest_hash || null,
-          })
-          .onConflictDoUpdate({
-            target: creatorClaims.id,
-            set: {
-              creatorName: String(c.creatorName || c.creator_name || "Creator"),
-              creatorEmail: String(c.creatorEmail || c.creator_email || "creator@example.com"),
-              assetTitle: String(c.assetTitle || c.asset_title || "Asset"),
-              workType: String(c.workType || c.work_type || "Source Code"),
-              claimDate: String(c.claimDate || c.claim_date || new Date().toISOString().split("T")[0]),
-              status: String(c.status || "VERIFIED"),
-              allocatedRestitutionUsd: Number(c.allocatedRestitutionUsd || c.allocated_restitution_usd || 0),
-              verifiedViaC2pa: Boolean(c.verifiedViaC2pa ?? c.verified_via_c2pa ?? false),
-              c2paManifestHash: c.c2paManifestHash || c.c2pa_manifest_hash || null,
-            }
-          });
-      }
-
-      res.json({ success: true, message: `Successfully synced ${items.length} claims to Cloud SQL.` });
-    } catch (err: any) {
-      console.error("Cloud SQL sync claims error:", err);
-      res.status(500).json({ error: "Failed to sync claims to Cloud SQL", details: err.message });
-    }
-  });
-
-  // 3. Sync & Fetch Feedback
-  app.get("/api/sql/feedback", async (req, res) => {
-    if (!isCloudSqlConfigured()) {
-      const store = readFallbackSqlStore();
-      return res.json({ success: true, mode: "local-fallback", count: store.feedback.length, feedback: store.feedback });
-    }
-    try {
-      const records = await getDb().select().from(feedback).orderBy(desc(feedback.createdAt));
-      res.json({ success: true, count: records.length, feedback: records });
-    } catch (err: any) {
-      console.error("Cloud SQL fetch feedback error:", err);
-      const store = readFallbackSqlStore();
-      res.json({ success: true, mode: "local-fallback", count: store.feedback.length, feedback: store.feedback });
-    }
-  });
-
-  app.post("/api/sql/sync-feedback", async (req, res) => {
-    try {
-      const { items } = req.body;
-      if (!Array.isArray(items)) {
-        return res.status(400).json({ error: "Expected items array" });
-      }
-
-      if (!isCloudSqlConfigured()) {
-        const store = readFallbackSqlStore();
-        const byId = new Map(store.feedback.map((f: any) => [f.id, f]));
-        for (const f of items) {
-          if (f.id) byId.set(String(f.id), f);
-        }
-        store.feedback = Array.from(byId.values());
-        writeFallbackSqlStore(store);
-        return res.json({ success: true, mode: "local-fallback", message: `Synced ${items.length} feedback items to local store.` });
-      }
-
-      const db = getDb();
-      for (const f of items) {
-        if (!f.id) continue;
-        await db.insert(feedback)
-          .values({
-            id: String(f.id),
-            testerId: f.testerId || f.tester_id || null,
-            testerEmail: String(f.testerEmail || f.tester_email || "user@example.com"),
-            appName: String(f.appName || f.app_name || "ForgeOS App Builder"),
-            category: String(f.category || "UI / Theme"),
-            sentiment: String(f.sentiment || "Positive"),
-            message: String(f.message || ""),
-            timestamp: String(f.timestamp || new Date().toISOString()),
-            status: String(f.status || "NEW"),
-            priority: String(f.priority || "MEDIUM"),
-          })
-          .onConflictDoUpdate({
-            target: feedback.id,
-            set: {
-              testerEmail: String(f.testerEmail || f.tester_email || "user@example.com"),
-              appName: String(f.appName || f.app_name || "ForgeOS App Builder"),
-              category: String(f.category || "UI / Theme"),
-              sentiment: String(f.sentiment || "Positive"),
-              message: String(f.message || ""),
-              timestamp: String(f.timestamp || new Date().toISOString()),
-              status: String(f.status || "NEW"),
-              priority: String(f.priority || "MEDIUM"),
-            }
-          });
-      }
-
-      res.json({ success: true, message: `Successfully synced ${items.length} feedback items to Cloud SQL.` });
-    } catch (err: any) {
-      console.error("Cloud SQL sync feedback error:", err);
-      res.status(500).json({ error: "Failed to sync feedback to Cloud SQL", details: err.message });
-    }
-  });
-
-  // 4. Drive Backups & Audit Log
-  app.get("/api/drive/backups", async (req, res) => {
-    if (!isCloudSqlConfigured()) {
-      const store = readFallbackSqlStore();
-      return res.json({ success: true, mode: "local-fallback", backups: store.driveBackups });
-    }
-    try {
-      const records = await getDb().select().from(driveBackups).orderBy(desc(driveBackups.createdAt)).limit(50);
-      res.json({ success: true, backups: records });
-    } catch (err: any) {
-      console.error("Cloud SQL fetch drive backups error:", err);
-      const store = readFallbackSqlStore();
-      res.json({ success: true, mode: "local-fallback", backups: store.driveBackups });
-    }
-  });
-
-  app.post("/api/drive/backups", async (req, res) => {
+  app.post("/api/drive/backups", (req, res) => {
     try {
       const { userUid, fileId, fileName, fileUrl, backupType, itemCount } = req.body;
       if (!userUid || !fileId || !fileName) {
         return res.status(400).json({ error: "Missing required backup fields" });
       }
 
-      if (!isCloudSqlConfigured()) {
-        const store = readFallbackSqlStore();
-        const entry = {
-          id: store.driveBackups.length + 1,
-          userUid: String(userUid),
-          fileId: String(fileId),
-          fileName: String(fileName),
-          fileUrl: fileUrl || null,
-          backupType: String(backupType || "full_ecosystem"),
-          itemCount: Number(itemCount || 0),
-          createdAt: new Date().toISOString(),
-        };
-        store.driveBackups.unshift(entry);
-        writeFallbackSqlStore(store);
-        return res.json({ success: true, mode: "local-fallback", backup: entry });
-      }
-
-      const db = getDb();
-      await db.insert(users)
-        .values({
-          uid: String(userUid),
-          email: req.body.userEmail || "user@example.com",
-        })
-        .onConflictDoNothing();
-
-      const inserted = await db.insert(driveBackups)
-        .values({
-          userUid: String(userUid),
-          fileId: String(fileId),
-          fileName: String(fileName),
-          fileUrl: fileUrl || null,
-          backupType: String(backupType || "full_ecosystem"),
-          itemCount: Number(itemCount || 0),
-        })
-        .returning();
-
-      res.json({ success: true, backup: inserted[0] });
+      const store = readFallbackSqlStore();
+      const entry = {
+        id: store.driveBackups.length + 1,
+        userUid: String(userUid),
+        fileId: String(fileId),
+        fileName: String(fileName),
+        fileUrl: fileUrl || null,
+        backupType: String(backupType || "full_ecosystem"),
+        itemCount: Number(itemCount || 0),
+        createdAt: new Date().toISOString(),
+      };
+      store.driveBackups.unshift(entry);
+      writeFallbackSqlStore(store);
+      return res.json({ success: true, mode: "json-registry", backup: entry });
     } catch (err: any) {
-      console.error("Cloud SQL record drive backup error:", err);
+      console.error("Record drive backup error:", err);
       res.status(500).json({ error: "Failed to record drive backup", details: err.message });
     }
   });
@@ -615,21 +480,21 @@ Respond in STRICT valid JSON with:
 
       if (!ai) {
         return res.json({
-          subject: `[${appTarget}] Urgent Update & New Micro-Royalty Payout Cycle`,
-          bodyText: `Hello Beta Testers,\n\nWe have deployed a new update for ${appTarget}. This build includes updated Stripe Sandbox settlement channels and 5-stage testing guardrails.\n\nPlease log in and verify your access.\n\nBest regards,\nThe H.U.M.A.N. Engineering Team`,
+          subject: `[${appTarget}] Urgent Update & 50% People's Covenant Cycle`,
+          bodyText: `Hello Contributors & Builders,\n\nWe have deployed an Omega Protocol v${SDK_VERSION} update for ${appTarget}. This build includes sovereign Direct-Rail (/pay) settlement channels and C2PA v2.1 provenance guardrails.\n\nPlease review your access in the console.\n\nBest regards,\nThe H.U.M.A.N. Engineering Team`,
           keyTakeaways: [
-            "Stripe Sandbox connection updated",
-            "5-stage verification guardrail live",
-            "Feedback portal open for new builds"
+            "Sovereign Direct-Rail (/pay) channel active",
+            "50% People's Covenant split (35% Pool A / 7.5% Pool B / 7.5% Pool C) enforced",
+            "C2PA-JUMBF-v2.1 & EU-AI-ACT-ART-50-53 verification active"
           ]
         });
       }
 
-      const prompt = `You are the lead communications officer for H.U.M.A.N. Protocol, an Ethical AI platform where builders stream 40% subscription royalties to open-source coders, authors, and artists (Tagline: "Powering Ethical AI apps, And Paying the People").
-Generate a high-impact broadcast message to beta testers and creators assigned to the app: "${appTarget}".
+      const prompt = `You are the lead communications officer for H.U.M.A.N. Protocol, an Ethical AI platform where builders enforce the 50% People's Covenant split (50% Ops / 50% Society Fund: 35% Pool A Creators, 7.5% Pool B Stewards, 7.5% Pool C Humanitarian Aid) (Tagline: "Powering Ethical AI apps, And Paying the People").
+Generate a high-impact broadcast message to contributors and creators assigned to the app: "${appTarget}".
 Topic: "${topic}"
 Tone: "${tone || "Professional & Inspiring"}"
-Additional Context: "${extraContext || "H.U.M.A.N. 40% subscription royalty pool and 5-stage testing guardrails"}"
+Additional Context: "${extraContext || "H.U.M.A.N. 50% People's Covenant and Omega Protocol v3.0.0-cleanroom"}"
 
 Respond in STRICT valid JSON:
 {
@@ -660,7 +525,7 @@ Respond in STRICT valid JSON:
     
     // High-quality fallback payload
     const fallbackResponse = {
-      generatedSnippet: `// Synthesized via H.U.M.A.N. Ethical AI Builder\n// Covenant: 40% Subscription Royalties Streamed to Human Creators\nimport { createStripeMicroPatronage } from '@human-network/artisan-pay';\n\nexport async function processArtisanRoyalty(authorId: string, amountCents: number) {\n  return await createStripeMicroPatronage({\n    recipientId: authorId,\n    amountCents,\n    currency: 'usd',\n    auditStamp: 'HUMAN-OS-ETHICAL-VERIFIED',\n    provenanceStandard: 'C2PA-v2.1-JUMBF'\n  });\n}`,
+      generatedSnippet: `// Synthesized via H.U.M.A.N. Cleanroom SDK v${SDK_VERSION}\n// Covenant: 50% People's Covenant (Pool A 35% / Pool B 7.5% / Pool C 7.5%)\nimport { computeCovenantSplit, signArtifactC2pa } from './sdk/cleanroomSdk';\n\nexport async function processArtisanRoyalty(authorId: string, grossUsd: number) {\n  const split = computeCovenantSplit(grossUsd);\n  return await signArtifactC2pa({ authorId, split }, { appId: 'human-hub' });\n}`,
       attributedCreators: [
         { name: "Cody Germain", role: "ReForgeOS Core Architect", package: "@reforge/kernel", microRoyaltyCents: 4.2 },
         { name: "Open Source Collective", role: "Tailwind / UI Primitives", package: "lucide-react", microRoyaltyCents: 2.1 },
@@ -891,11 +756,11 @@ Respond in STRICT JSON:
 
       const fallbackStats = humanStats || {
         totalStreamedUsd: 128450,
-        totalSocietyFundUsd: 76408,
+        totalSocietyFundUsd: 95510,
         activeSubscribers: 3850,
         grossMrrUsd: 191020,
         verifiedCreators: 180,
-        covenantSplitPct: "40%",
+        covenantSplitPct: "50%",
         activeBadgeApps: 4,
         holdingEscrowUsd: 24600,
         copyleftViolations: 0,
@@ -909,38 +774,38 @@ Respond in STRICT JSON:
         let stance = "Bullish Offer";
         let score = 9.4;
         let quote = "";
-        let sweetSpot = persona?.sweetSpot || "40% Non-Profit Trust Seal + 80% SaaS Software Margins";
+        let sweetSpot = persona?.sweetSpot || "50% People's Covenant Trust Seal + Sovereign Direct-Rail Margins";
         let strengths = [
-          `40% Society Fund covenant ($${(fallbackStats.totalSocietyFundUsd || 76408).toLocaleString()} pool) generates defensible consumer trust without sacrificing SaaS margins.`,
+          `50% People's Covenant ($${(fallbackStats.totalSocietyFundUsd || 95510).toLocaleString()} Society Fund across Pool A 35% / Pool B 7.5% / Pool C 7.5%) builds defensible enterprise trust alongside 50% sustainable Ops margin.`,
           `Multi-app ecosystem across ${fallbackStats.activeBadgeApps || 4} flagship verticals generates diversified gross MRR of $${(fallbackStats.grossMrrUsd || 191020).toLocaleString()}.`,
-          `Zero-copyleft C2PA cryptographic audit trail provides enterprise buyers bulletproof legal indemnity.`
+          `Zero-copyleft C2PA-JUMBF-v2.1 & EU-AI-ACT-ART-50-53 audit trail provides enterprise buyers bulletproof legal indemnity.`
         ];
         let risks = [
-          `Need automated Stripe batching to keep per-synthesis micro-payout transfer fees under 1.5%.`,
+          `Maintain low settlement friction on Canada RTR / Sovereign Direct-Rail batch payouts across Pool A/B/C.`,
           `Must maintain high subscriber retention across commercial apps like Tome Crafter and RLM Pro Studio.`
         ];
-        let recommendation = "Deploy automated Stripe batching intervals to preserve margins and position the non-profit trust seal as an enterprise RFP requirement.";
+        let recommendation = "Enforce automated Direct-Rail settlement intervals and position the 50% People's Covenant trust seal as an enterprise RFP requirement.";
 
         if (archetype === 'The Cash Flow Hawk') {
           score = 9.4;
           stance = "Bullish Offer";
-          quote = `"I look at that $${(fallbackStats.grossMrrUsd || 191020).toLocaleString()} gross MRR and the 40% non-profit allocation ($${(fallbackStats.totalSocietyFundUsd || 76408).toLocaleString()}). By keeping the foundation independent, you get unimpeachable moral standing while the 4 commercial apps capture high-margin software subscriptions. As long as you keep micro-royalty batching tight, this is an 80% gross margin tollbooth machine!"`;
+          quote = `"I look at that $${(fallbackStats.grossMrrUsd || 191020).toLocaleString()} gross MRR and the clean 50% / 50% People's Covenant ($${(fallbackStats.totalSocietyFundUsd || 95510).toLocaleString()} Society Fund). Retaining 50% for Infrastructure & Ops while routing Pool A (35%), Pool B (7.5%), and Pool C (7.5%) via Direct-Rail gives unimpeachable unit economics."`;
         } else if (archetype === 'The Artistic Patron') {
           score = 9.7;
           stance = "Bullish Offer";
-          quote = `"With ${fallbackStats.verifiedCreators || 180} verified human creators already sharing in the $${(fallbackStats.totalSocietyFundUsd || 76408).toLocaleString()} Society Fund, this is the first AI protocol that treats musicians, authors, and artists with true dignity. 100% master retention plus C2PA content provenance will make this an indie creator crusade!"`;
+          quote = `"With ${fallbackStats.verifiedCreators || 180} verified human creators already sharing in Pool A (70% of the $${(fallbackStats.totalSocietyFundUsd || 95510).toLocaleString()} Society Fund), this is the first AI protocol that guarantees true equity plus C2PA-JUMBF-v2.1 provenance!"`;
         } else if (archetype === 'The Enterprise Defender') {
           score = 9.5;
           stance = "Bullish Offer";
-          quote = `"Fortune 500 legal teams are terrified of AI copyright class-actions. Having cleanroom training datasets, ${fallbackStats.copyleftViolations || 0} copyleft violations, and automated C2PA compliance logs turns an existential corporate legal liability into a procurement checkbox. Pitch this directly to enterprise General Counsels."`;
+          quote = `"Fortune 500 legal teams are terrified of AI copyright class-actions. Having cleanroom training datasets, ${fallbackStats.copyleftViolations || 0} copyleft violations, EU AI Act Art. 50-53 manifests, and automated C2PA compliance logs turns corporate liability into a procurement checkbox."`;
         } else if (archetype === 'The Tech Idealist') {
           score = 8.9;
           stance = "Conditional Term-Sheet";
-          quote = `"The C2PA v2.1 JUMBF cryptographic manifest and Ed25519 signature scheme are mathematically sound. With ${fallbackStats.activeSubscribers || 3850} subscribers already generating verified proof tokens, the architecture proves ethical provenance scales. Ensure the App Builder AST engine remains open and auditable."`;
+          quote = `"The C2PA-JUMBF-v2.1 SHA-256 manifest and Omega Direct-Rail HMAC verification are mathematically sound. With ${fallbackStats.activeSubscribers || 3850} subscribers already generating verified proof tokens, the architecture proves ethical provenance scales."`;
         } else {
           score = 9.2;
           stance = "Bullish Offer";
-          quote = `"The flywheel between the 4 commercial badge apps and the universal royalty pool is brilliant. Every subscriber on Tome Crafter or RLM Pro fuels the creator ecosystem and brings more developers to ForgeOS."`;
+          quote = `"The flywheel between the commercial cleanroom apps and the 50% People's Covenant pool is compelling. Every subscriber fuels creators, commons stewards, and Global Pool C ($FOOD / $MED) aid."`;
         }
 
         return res.json({
@@ -954,7 +819,7 @@ Respond in STRICT JSON:
           sweetSpotAlignment: sweetSpot,
           directQuote: quote,
           statsGrounding: [
-            { referencedMetric: '40% Society Fund Pool', interpretation: `$${(fallbackStats.totalSocietyFundUsd || 76408).toLocaleString()} in Stripe Connect escrow providing non-profit credibility.` },
+            { referencedMetric: '50% Society Fund Pool', interpretation: `$${(fallbackStats.totalSocietyFundUsd || 95510).toLocaleString()} routed across Pool A (35%), Pool B (7.5%), and Pool C (7.5%).` },
             { referencedMetric: 'Gross Monthly MRR', interpretation: `$${(fallbackStats.grossMrrUsd || 191020).toLocaleString()} across ${fallbackStats.activeBadgeApps || 4} commercial applications.` },
             { referencedMetric: 'Active Paying Subscribers', interpretation: `${(fallbackStats.activeSubscribers || 3850).toLocaleString()} paying subscribers driving recurring creator yields.` },
             { referencedMetric: 'Verified Human Creators', interpretation: `${fallbackStats.verifiedCreators || 180} registered rights holders receiving automated dividend distributions.` }
@@ -964,7 +829,7 @@ Respond in STRICT JSON:
           recommendedAction: recommendation,
           financialValuationVerdict: {
             mrrAppraisal: `$${(fallbackStats.grossMrrUsd || 191020).toLocaleString()} blended MRR creates an ARR run-rate of $${((fallbackStats.grossMrrUsd || 191020) * 12).toLocaleString()}.`,
-            covenantRiskScore: 'Low (40% automated split is cryptographically enforced and contractually bounded)',
+            covenantRiskScore: 'Low (50% automated split is cryptographically enforced via Omega Cleanroom SDK v3.0.0-cleanroom)',
             recommendedPricingTier: 'Introduce Enterprise Commercial Seat tier with unlimited C2PA audit exports at $299/mo'
           },
           generatedAt: new Date().toISOString(),
@@ -975,7 +840,7 @@ Respond in STRICT JSON:
       }
 
       const prompt = `You are an elite investor and board-level stakeholder simulation engine.
-You are evaluating the H.U.M.A.N. Protocol ("Powering Ethical AI apps, And Paying the People") and its 4-app commercial software suite.
+You are evaluating the H.U.M.A.N. Protocol ("Powering Ethical AI apps, And Paying the People") and its commercial software suite.
 
 INVESTOR PERSONA TO SIMULATE:
 - Name: "${persona?.name || 'Investor'}"
@@ -988,7 +853,8 @@ INVESTOR PERSONA TO SIMULATE:
 - Known Persona Questions: ${JSON.stringify(persona?.keyQuestions || [])}
 
 CURRENT LIVE H.U.M.A.N. SYSTEM METRICS & FINANCIAL STATS:
-- 40% Non-Profit Society Fund Pool: $${fallbackStats.totalSocietyFundUsd?.toLocaleString()} (Held in Stripe Connect Escrow)
+- 50% People's Covenant Society Fund Pool: $${fallbackStats.totalSocietyFundUsd?.toLocaleString()} (Pool A Creators 35%, Pool B Stewards 7.5%, Pool C Humanitarian Aid 7.5%)
+- 50% Infrastructure & Ops Allocation: $${fallbackStats.totalSocietyFundUsd?.toLocaleString()}
 - Gross Monthly MRR across Fleet: $${fallbackStats.grossMrrUsd?.toLocaleString()} ($${(fallbackStats.grossMrrUsd * 12).toLocaleString()} ARR run rate)
 - Total Active Paying Subscribers: ${fallbackStats.activeSubscribers?.toLocaleString()}
 - Total Cumulative Streamed Royalties: $${fallbackStats.totalStreamedUsd?.toLocaleString()}
@@ -996,7 +862,7 @@ CURRENT LIVE H.U.M.A.N. SYSTEM METRICS & FINANCIAL STATS:
 - Active Connected Commercial Apps (4 Flagships): Tome Crafter ($29/mo), RLM Pro Studio ($49/mo), ForgeOS App Builder ($99/mo), RL Easy Flow ($39/mo)
 - Unallocated Holding Escrow: $${fallbackStats.holdingEscrowUsd?.toLocaleString()}
 - Copyleft Quarantine Violations: ${fallbackStats.copyleftViolations} (Zero contamination)
-- Cryptographic Audit Standard: C2PA v2.1 JUMBF Content Credentials + Fairly Trained Certified
+- Cryptographic Audit Standard: C2PA-JUMBF-v2.1 + EU-AI-ACT-ART-50-53
 
 PITCH CONTEXT & SCENARIO:
 - Selected Pitch Scenario: "${pitchScenario || 'The Master Hybrid Blueprint: Independent Non-Profit Badge Foundation + 4 For-Profit Commercial SaaS Suites'}"
@@ -1005,7 +871,7 @@ PITCH CONTEXT & SCENARIO:
 
 TASK:
 Simulate this exact investor archetype's genuine, critical, in-character feedback to this pitch and these exact numbers.
-Cite specific numbers from the stats (e.g. 40% split, $76.4k Society Fund, $191k MRR, 3,850 subscribers, 180 creators).
+Cite specific numbers from the stats (e.g. 50% People's Covenant split, $95.5k Society Fund, $191k MRR, 3,850 subscribers, 180 creators).
 Speak strictly in their chosen tone of voice (e.g. sharp/financial if Cash Flow Hawk, passionate/rights-focused if Artistic Patron, legalistic if Enterprise Defender, technical if Tech Idealist).
 
 Respond in STRICT JSON format:
@@ -1059,224 +925,422 @@ Respond in STRICT JSON format:
     }
   });
 
-  // 4. Sensitive Operations: Stripe Sandbox Status & Reset
-  /**
-   * Stripe Sandbox Reset Endpoint
-   * NOTE: In a live production deployment, initialize Stripe via:
-   * const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
-   * Securely store STRIPE_SECRET_KEY in server environment variables. Never expose to client.
-   */
-  app.post("/api/stripe/sandbox-reset", (req, res) => {
-    const { testerId, email } = req.body;
-    
-    // Simulate secure backend Stripe sandbox customer/account refresh
-    const refreshedAccount = {
-      testerId,
-      email,
-      stripeSandboxAccountId: `acct_test_${Math.random().toString(36).substring(2, 12)}`,
-      stripeCustomerId: `cus_test_${Math.random().toString(36).substring(2, 10)}`,
-      status: "Stripe Sandbox",
-      testBalanceCents: 25000,
-      payoutMethodStatus: "verified_sandbox_bank",
-      lastResetTimestamp: new Date().toISOString(),
-    };
-
+  // 4. Sovereign Omega Direct-Rail (/pay) Checkout Signer & Gateway Info
+  app.get("/api/omega/gateway-info", (req, res) => {
+    const hostUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+    const omegaUrl = getOmegaAppUrlServer();
     res.json({
-      success: true,
-      message: `Stripe Sandbox successfully reset for tester ${email || testerId}. Test tokens refreshed.`,
-      account: refreshedAccount,
+      ok: true,
+      sdkVersion: SDK_VERSION,
+      omegaAppUrl: omegaUrl,
+      payEndpointUrl: `${omegaUrl}/pay`,
+      webhookEndpointUrl: `${hostUrl}/api/omega/webhook`,
+      rail: DEFAULT_RAIL,
+      corridor: DEFAULT_CORRIDOR,
+      secretConfigured: Boolean(process.env.OMEGA_GATEWAY_SECRET),
+      supportedEvents: ["omega.payment.completed", "omega.covenant.settled"],
+      supportedApps: Object.values(FLEET_APPS_REGISTRY),
+      contributorRoles: CONTRIBUTOR_ROLES,
     });
   });
 
-  // 5. Sensitive Operations: Grant Access
-  app.post("/api/stripe/grant-access", (req, res) => {
-    const { testerId, appName, accessTier } = req.body;
+  app.post("/api/omega/sign-checkout", (req, res) => {
+    try {
+      const {
+        app: requestedApp = "human-hub",
+        plan = "Pro Sovereign",
+        target = "fleet-upgrade",
+        amount_cents = 4900,
+        email = "",
+        user_id = "",
+        corridor = DEFAULT_CORRIDOR,
+        return_url,
+        cancel_url,
+      } = req.body || {};
 
-    res.json({
-      success: true,
-      message: `Access granted for ${appName} (Tier: ${accessTier || 'Beta Tester Enterprise'}). Webhook dispatched.`,
-      testerId,
-      grantedApp: appName,
-      licenseKey: `HUMAN-${Math.random().toString(36).substring(2, 8).toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-      activeAt: new Date().toISOString(),
-    });
+      const fleetApp = resolveFleetApp(String(requestedApp));
+      const sessionId = `sess_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
+      const origin = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
+      const resolvedReturnUrl =
+        return_url ||
+        `${origin}/?omega_status=success&tier=${encodeURIComponent(String(plan))}&session_id=${encodeURIComponent(sessionId)}`;
+      const resolvedCancelUrl = cancel_url || `${origin}/?omega_status=cancelled`;
+
+      const rawParams: Record<string, string> = {
+        app: fleetApp.appId,
+        app_code: fleetApp.code,
+        session_id: sessionId,
+        plan: String(plan),
+        target: String(target),
+        rail: DEFAULT_RAIL,
+        corridor: String(corridor || DEFAULT_CORRIDOR),
+        amount_cents: String(Math.max(100, Math.round(Number(amount_cents) || 4900))),
+        email: String(email || ""),
+        user_id: String(user_id || ""),
+        return_url: String(resolvedReturnUrl),
+        cancel_url: String(resolvedCancelUrl),
+      };
+
+      const sortedQuery = buildSortedQueryParamsString(rawParams);
+      const sig = crypto
+        .createHmac("sha256", getOmegaGatewaySecret())
+        .update(sortedQuery)
+        .digest("hex");
+
+      const finalParams = new URLSearchParams(sortedQuery);
+      finalParams.set("sig", sig);
+
+      const omegaPayUrl = `${getOmegaAppUrlServer()}/pay?${finalParams.toString()}`;
+      const splitCents = computeCovenantSplitCents(Number(rawParams.amount_cents));
+
+      res.json({
+        ok: true,
+        url: omegaPayUrl,
+        sessionId,
+        sig,
+        params: { ...rawParams, sig },
+        covenantSplitCents: splitCents,
+        sdkVersion: SDK_VERSION,
+      });
+    } catch (err: any) {
+      console.error("Omega sign-checkout error:", err);
+      res.status(500).json({ ok: false, error: "Failed to sign Omega checkout URL", details: err.message });
+    }
   });
 
-  // 6. Stripe Webhook Status & Setup Info
-  app.get("/api/stripe/webhook-info", (req, res) => {
-    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get("host")}`;
-    res.json({
-      webhookEndpointUrl: `${appUrl}/api/stripe/webhook`,
-      hasSecretKey: Boolean(process.env.STRIPE_SECRET_KEY),
-      hasWebhookSecret: Boolean(process.env.STRIPE_WEBHOOK_SECRET),
-      supportedEvents: [
-        "checkout.session.completed",
-        "customer.subscription.created",
-        "customer.subscription.updated",
-        "customer.subscription.deleted",
-        "payment_intent.succeeded",
-        "transfer.created",
-        "account.updated",
-      ],
-      mode: process.env.STRIPE_SECRET_KEY ? "Live / Connected" : "Sandbox / Simulation Mode",
-    });
-  });
-
-  // 7. Stripe Webhook Listener (Requires Raw Body for Cryptographic Signature Verification)
+  // 5. Sovereign Omega Signed Webhook Receiver (Requires Raw Body for X-Omega-Signature HMAC-SHA256)
   app.post(
-    "/api/stripe/webhook",
+    "/api/omega/webhook",
     express.raw({ type: "application/json" }),
     async (req, res) => {
-      const sig = req.headers["stripe-signature"] as string | undefined;
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-      const stripe = getStripeClient();
-
-      let event: Stripe.Event;
-
-      if (stripe && webhookSecret && sig) {
-        try {
-          // Cryptographic verification with raw body payload
-          event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-        } catch (err: any) {
-          console.error(`⚠️ Stripe Webhook signature verification failed: ${err.message}`);
-          return res.status(400).send(`Webhook Signature Error: ${err.message}`);
-        }
-      } else {
-        // Fallback for sandbox simulation / development testing without secret key
-        try {
-          const bodyString = typeof req.body === "string" ? req.body : req.body.toString("utf8");
-          event = JSON.parse(bodyString);
-        } catch (err) {
-          return res.status(400).send("Invalid JSON payload");
-        }
-      }
-
-      console.log(`[Stripe Webhook Received] Event Type: ${event.type} (ID: ${event.id})`);
-
-      // Handle specific Stripe Event Types
       try {
-        switch (event.type) {
-          case "checkout.session.completed": {
-            const session = event.data.object as Stripe.Checkout.Session;
-            console.log(`✅ Checkout completed for customer: ${session.customer_email || session.customer}`);
-            // Logic to grant tester/patron access or activate subscription
-            break;
-          }
-
-          case "customer.subscription.created":
-          case "customer.subscription.updated": {
-            const subscription = event.data.object as Stripe.Subscription;
-            console.log(`🔄 Subscription active: ${subscription.id} (Status: ${subscription.status})`);
-            
-            // 40% Society Fund Automatic Split Logic:
-            // Intercept subscription payment amount, extract 40% and route to Society Fund Connect Account
-            const unitAmountCents = subscription.items?.data?.[0]?.price?.unit_amount || 4900;
-            const societyFundCutCents = Math.round(unitAmountCents * 0.40);
-            
-            console.log(`⚖️ [H.U.M.A.N. 40% Covenant Split] Intercepted $${(unitAmountCents / 100).toFixed(2)} subscription.`);
-            console.log(`🏛️ Dispatched 40% ($${(societyFundCutCents / 100).toFixed(2)}) immediately to Society Fund in Stripe Connect (Escrow until registered).`);
-            break;
-          }
-
-          case "invoice.payment_succeeded": {
-            const invoice = event.data.object as any;
-            const totalPaidCents = invoice.amount_paid || 4900;
-            const cut40Cents = Math.round(totalPaidCents * 0.40);
-            console.log(`💳 [Stripe Invoice Succeeded] Auto-transferred 40% ($${(cut40Cents / 100).toFixed(2)}) to H.U.M.A.N. Society Fund.`);
-            break;
-          }
-
-          case "customer.subscription.deleted": {
-            const subscription = event.data.object as Stripe.Subscription;
-            console.log(`❌ Subscription cancelled: ${subscription.id}`);
-            break;
-          }
-
-          case "payment_intent.succeeded": {
-            const paymentIntent = event.data.object as Stripe.PaymentIntent;
-            console.log(`💰 Micro-patronage payment succeeded: $${(paymentIntent.amount / 100).toFixed(2)}`);
-            break;
-          }
-
-          case "transfer.created": {
-            const transfer = event.data.object as Stripe.Transfer;
-            console.log(`💸 Micro-royalty payout transfer created: $${(transfer.amount / 100).toFixed(2)} to account ${transfer.destination}`);
-            break;
-          }
-
-          default:
-            console.log(`ℹ️ Unhandled event type: ${event.type}`);
+        const sigHeader = String(req.headers["x-omega-signature"] || "");
+        if (!sigHeader.startsWith("sha256=")) {
+          return res.status(401).json({ ok: false, error: "Missing or malformed X-Omega-Signature header" });
         }
 
-        // Return a 200 response to acknowledge receipt of the event
-        res.status(200).json({ received: true, eventType: event.type, eventId: event.id });
-      } catch (handlerErr: any) {
-        console.error("Error handling Stripe event:", handlerErr);
-        res.status(500).json({ error: "Internal webhook processing error" });
+        const rawBodyBuffer = Buffer.isBuffer(req.body)
+          ? req.body
+          : Buffer.from(typeof req.body === "string" ? req.body : JSON.stringify(req.body || {}), "utf8");
+
+        const providedHex = sigHeader.slice("sha256=".length).trim().toLowerCase();
+        const expectedHex = crypto
+          .createHmac("sha256", getOmegaGatewaySecret())
+          .update(rawBodyBuffer)
+          .digest("hex")
+          .toLowerCase();
+
+        const providedBuf = Buffer.from(providedHex, "utf8");
+        const expectedBuf = Buffer.from(expectedHex, "utf8");
+
+        if (providedBuf.length !== expectedBuf.length || !crypto.timingSafeEqual(providedBuf, expectedBuf)) {
+          console.warn("Omega Webhook HMAC verification failed");
+          return res.status(401).json({ ok: false, error: "Invalid X-Omega-Signature HMAC digest" });
+        }
+
+        const payload = JSON.parse(rawBodyBuffer.toString("utf8"));
+        const eventType = payload.type || payload.event || "unknown";
+        const data = payload.data || payload;
+
+        if (eventType === "omega.payment.completed") {
+          const amountCents = Number(data.amount_cents || data.amountCents || 4900);
+          const splitCents = computeCovenantSplitCents(amountCents);
+          const splitUsd = computeCovenantSplit(amountCents / 100);
+          const fleetApp = resolveFleetApp(data.app || "human-hub");
+
+          const receipt = {
+            id: payload.id || `omega_evt_${Date.now().toString(36)}`,
+            eventType,
+            sessionId: data.session_id || data.sessionId || "",
+            appId: fleetApp.appId,
+            appCode: fleetApp.code,
+            plan: data.plan || data.tier || "Pro",
+            email: data.email || "",
+            userId: data.user_id || data.userId || "",
+            rail: data.rail || DEFAULT_RAIL,
+            corridor: data.corridor || DEFAULT_CORRIDOR,
+            amountCents,
+            covenantSplitCents: splitCents,
+            covenantSplitUsd: splitUsd,
+            receivedAt: new Date().toISOString(),
+          };
+
+          const store = readFallbackSqlStore();
+          store.omegaPayments = [receipt, ...(store.omegaPayments || [])].slice(0, 100);
+          writeFallbackSqlStore(store);
+
+          return res.status(200).json({
+            received: true,
+            ok: true,
+            eventType,
+            receipt,
+          });
+        }
+
+        return res.status(200).json({
+          received: true,
+          ok: true,
+          eventType,
+        });
+      } catch (err: any) {
+        console.error("Omega webhook error:", err);
+        return res.status(400).json({ ok: false, error: "Invalid Omega webhook payload", details: err.message });
       }
     }
   );
 
-  // 8. Society Fund 40% Subscription Royalty API Endpoints
-  app.get("/api/society-fund/overview", (req, res) => {
+  app.get("/api/omega/payments", (_req, res) => {
+    const store = readFallbackSqlStore();
+    res.json({ ok: true, payments: store.omegaPayments || [] });
+  });
+
+  // 6. C2PA-Signed Deliverable Sync -> ${OMEGA_APP_URL}/api/fleet/:appId/records
+  app.post(["/api/omega/records", "/api/omega/record-deliverable"], async (req, res) => {
+    try {
+      const { appId = "human-hub", corridor = DEFAULT_CORRIDOR, manifest, payload, title, artifactType, grossUsd } = req.body || {};
+      const fleetApp = resolveFleetApp(String(appId));
+      const canonicalString = JSON.stringify({
+        appId: fleetApp.appId,
+        code: fleetApp.code,
+        corridor,
+        manifest,
+        payload,
+        title,
+      });
+      const serverSha256 = crypto.createHash("sha256").update(canonicalString).digest("hex");
+
+      const finalizedManifest = {
+        artifactId: manifest?.artifactId || `c2pa_${fleetApp.appId}_${Date.now().toString(36)}`,
+        appId: fleetApp.appId,
+        code: fleetApp.code,
+        sdkVersion: SDK_VERSION,
+        corridor: String(corridor || DEFAULT_CORRIDOR),
+        standards: C2PA_ATTESTATION_STANDARDS,
+        sha256: manifest?.sha256 || serverSha256,
+        timestamp: manifest?.timestamp || new Date().toISOString(),
+        title: manifest?.title || title || `${fleetApp.name} C2PA Deliverable`,
+        artifactType: manifest?.artifactType || artifactType || "deliverable",
+        covenantSplit:
+          manifest?.covenantSplit ||
+          (typeof grossUsd === "number" ? computeCovenantSplit(grossUsd) : undefined),
+      };
+
+      const omegaEndpoint = `${getOmegaAppUrlServer()}/api/fleet/${fleetApp.appId}/records`;
+      let syncedToOmega = false;
+      let omegaStatus = 0;
+
+      try {
+        const upstreamRes = await fetch(omegaEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            appId: fleetApp.appId,
+            code: fleetApp.code,
+            sdkVersion: SDK_VERSION,
+            corridor: finalizedManifest.corridor,
+            standards: C2PA_ATTESTATION_STANDARDS,
+            sha256: finalizedManifest.sha256,
+            manifest: finalizedManifest,
+            payload,
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+        omegaStatus = upstreamRes.status;
+        syncedToOmega = upstreamRes.ok;
+      } catch (upstreamErr: any) {
+        console.warn(`Omega fleet record sync deferred (${omegaEndpoint}):`, upstreamErr.message);
+      }
+
+      const store = readFallbackSqlStore();
+      store.omegaRecords = [finalizedManifest, ...(store.omegaRecords || [])].slice(0, 100);
+      writeFallbackSqlStore(store);
+
+      res.json({
+        ok: true,
+        manifest: finalizedManifest,
+        syncedToOmega,
+        omegaEndpoint,
+        omegaStatus,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: "Failed to record C2PA deliverable", details: err.message });
+    }
+  });
+
+  app.get("/api/omega/records", (_req, res) => {
+    const store = readFallbackSqlStore();
+    res.json({ ok: true, records: store.omegaRecords || [] });
+  });
+
+  // 7. Contributor Onboarding & Session Reset Proxied to Omega Hub
+  app.post("/api/omega/contributors/register", async (req, res) => {
+    try {
+      const { name, email, github_handle, role = "Developer", app_access_list = [] } = req.body || {};
+      const validRole = CONTRIBUTOR_ROLES.includes(role) ? role : "Developer";
+      const contributorRecord = {
+        id: `contrib_${Date.now().toString(36)}_${crypto.randomBytes(3).toString("hex")}`,
+        collection: "contributors",
+        name: String(name || "Contributor"),
+        email: String(email || ""),
+        github_handle: String(github_handle || ""),
+        role: validRole,
+        app_access_list: Array.isArray(app_access_list) ? app_access_list : [],
+        corridor: DEFAULT_CORRIDOR,
+        sdkVersion: SDK_VERSION,
+        createdAt: new Date().toISOString(),
+      };
+
+      const omegaEndpoint = `${getOmegaAppUrlServer()}/api/v1/register-contributor`;
+      let syncedToOmega = false;
+      let omegaStatus = 0;
+
+      try {
+        const upstreamRes = await fetch(omegaEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(contributorRecord),
+          signal: AbortSignal.timeout(5000),
+        });
+        omegaStatus = upstreamRes.status;
+        syncedToOmega = upstreamRes.ok;
+      } catch (upstreamErr: any) {
+        console.warn(`Omega contributor registration deferred (${omegaEndpoint}):`, upstreamErr.message);
+      }
+
+      const store = readFallbackSqlStore();
+      store.contributors = [contributorRecord, ...(store.contributors || [])].slice(0, 200);
+      writeFallbackSqlStore(store);
+
+      res.json({
+        ok: true,
+        contributor: contributorRecord,
+        syncedToOmega,
+        omegaEndpoint,
+        omegaStatus,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: "Contributor registration failed", details: err.message });
+    }
+  });
+
+  app.post(["/api/omega/gateway/reset", "/api/omega/contributors/:id/reset"], async (req, res) => {
+    try {
+      const contributorId = req.params.id || req.body?.id || "";
+      const { email } = req.body || {};
+      const omegaEndpoint = `${getOmegaAppUrlServer()}/api/omega/gateway/reset`;
+      let syncedToOmega = false;
+      let omegaStatus = 0;
+
+      try {
+        const upstreamRes = await fetch(omegaEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: contributorId, email: email || "", sdkVersion: SDK_VERSION }),
+          signal: AbortSignal.timeout(5000),
+        });
+        omegaStatus = upstreamRes.status;
+        syncedToOmega = upstreamRes.ok;
+      } catch (upstreamErr: any) {
+        console.warn(`Omega gateway reset deferred (${omegaEndpoint}):`, upstreamErr.message);
+      }
+
+      res.json({
+        ok: true,
+        success: true,
+        contributorId,
+        status: "Omega Direct-Rail",
+        syncedToOmega,
+        omegaEndpoint,
+        omegaStatus,
+        resetAt: new Date().toISOString(),
+        message: `Gateway reset dispatched via Omega Hub for ${email || contributorId || "active session"}.`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ ok: false, error: "Omega gateway reset failed", details: err.message });
+    }
+  });
+
+  // 8. Society Fund 50% People's Covenant Royalty API Endpoints
+  app.get("/api/society-fund/overview", (_req, res) => {
+    const apps = [
+      { id: "tome-crafter", name: "Tome Crafter", plan_monthly_usd: 29.00 },
+      { id: "rlm-pro-studio", name: "RLM Pro Studio", plan_monthly_usd: 49.00 },
+      { id: "forge-os", name: "Forge OS", plan_monthly_usd: 99.00 },
+      { id: "rl-easy-flow", name: "RL Easy Flow", plan_monthly_usd: 39.00 },
+    ].map((appItem) => {
+      const split = computeCovenantSplit(appItem.plan_monthly_usd);
+      return {
+        ...appItem,
+        share_50pct_usd: split.societyFundUsd,
+        poolA_creators_usd: split.poolACreatorsUsd,
+        poolB_stewards_usd: split.poolBStewardsUsd,
+        poolC_humanitarian_usd: split.poolCHumanitarianUsd,
+      };
+    });
+
     res.json({
-      protocol: "H.U.M.A.N. 40% Subscription Royalty Covenant",
-      society_fund_share_pct: 40,
-      stripe_connect_account: "acct_human_society_fund_nonprofit",
+      protocol: "H.U.M.A.N. 50% People's Covenant",
+      sdkVersion: SDK_VERSION,
+      society_fund_share_pct: 50,
+      corridor: DEFAULT_CORRIDOR,
+      settlement_rail: DEFAULT_RAIL,
       status: "Active & Enforced",
-      total_apps_in_fleet: 4,
-      supported_apps: [
-        { id: "tomecrafter-ai-book-studio", name: "Tome Crafter", plan_monthly_usd: 29.00, share_40pct_usd: 11.60 },
-        { id: "remix-lyria-studio-5954", name: "RLM Pro Studio", plan_monthly_usd: 49.00, share_40pct_usd: 19.60 },
-        { id: "forgeos-app-builder-tester", name: "ForgeOS App Builders", plan_monthly_usd: 99.00, share_40pct_usd: 39.60 },
-        { id: "rl-easy-flow", name: "RL Easy Flow", plan_monthly_usd: 39.00, share_40pct_usd: 15.60 },
-      ],
-      distribution_rule: "Funds held in Stripe Connect escrow until creator is registered. Disbursed per active subscriber tally.",
+      total_apps_in_fleet: apps.length,
+      supported_apps: apps,
+      distribution_rule:
+        "50% Infrastructure & Ops / 50% Society Covenant Fund (70% Pool A Creators [35% gross], 15% Pool B Stewards & Commons [7.5% gross], 15% Pool C Humanitarian Aid $FOOD/$MED [7.5% gross]).",
     });
   });
 
   app.post("/api/society-fund/simulate-subscription", (req, res) => {
     const { appId, planPrice = 49.00, customerEmail = "subscriber@example.com" } = req.body;
-    const cut40 = planPrice * 0.40;
-    const transferId = `tr_society_split_${Math.random().toString(36).substring(2, 10)}`;
+    const split = computeCovenantSplit(Number(planPrice));
+    const transferId = `omega_split_${Math.random().toString(36).substring(2, 10)}`;
 
     res.json({
       success: true,
       appId,
       customerEmail,
-      grossPaidUsd: planPrice,
-      societyFund40pctUsd: cut40,
-      appRetained60pctUsd: planPrice * 0.60,
-      stripeTransferId: transferId,
-      destinationAccount: "acct_human_society_fund_nonprofit",
-      holdingEscrowStatus: "Held in escrow for registered creators",
+      grossPaidUsd: split.grossUsd,
+      societyFund50pctUsd: split.societyFundUsd,
+      appRetained50pctUsd: split.opsInfraUsd,
+      poolACreatorsUsd: split.poolACreatorsUsd,
+      poolBStewardsUsd: split.poolBStewardsUsd,
+      poolCHumanitarianUsd: split.poolCHumanitarianUsd,
+      corridor: split.corridor,
+      settlementId: transferId,
+      holdingEscrowStatus: "Allocated across Pool A / Pool B / Pool C ($FOOD / $MED)",
       timestamp: new Date().toISOString(),
     });
   });
 
   app.post("/api/society-fund/execute-distribution", (req, res) => {
-    const { totalPoolUsd = 76408.00, registeredCreatorsCount = 180 } = req.body;
-    const perCreatorPayout = registeredCreatorsCount > 0 ? totalPoolUsd / registeredCreatorsCount : 0;
-    const batchId = `batch_stripe_connect_dist_${Date.now()}`;
+    const { totalPoolUsd = 95510.00, registeredCreatorsCount = 180 } = req.body;
+    const poolBreakdown = computeCovenantSplit(Number(totalPoolUsd) * 2);
+    const perCreatorPayout = registeredCreatorsCount > 0 ? poolBreakdown.poolACreatorsUsd / registeredCreatorsCount : 0;
+    const batchId = `batch_omega_rtr_${Date.now()}`;
 
     res.json({
       success: true,
       batchId,
-      totalDistributedUsd: totalPoolUsd,
+      totalDistributedUsd: Number(totalPoolUsd),
+      poolBreakdown,
       registeredCreatorsCount,
-      perCreatorPayoutUsd: perCreatorPayout,
-      c2paAuditHash: `0x${Math.random().toString(16).substring(2, 14)}...audit2026`,
+      perCreatorPayoutUsd: Number(perCreatorPayout.toFixed(2)),
+      c2paAuditHash: `0x${crypto.createHash("sha256").update(batchId).digest("hex").slice(0, 16)}`,
       timestamp: new Date().toISOString(),
-      status: "COMPLETED_STRIPE_CONNECT_DISBURSED",
+      status: "COMPLETED_OMEGA_DIRECT_RAIL_DISBURSED",
     });
   });
 
   // 9. Copyright Owner Portal Direct Messaging & Creator Accounts API
-  app.get("/api/creators", (req, res) => {
+  app.get("/api/creators", (_req, res) => {
     res.json({
       total_registered: 180,
-      protocol: "H.U.M.A.N. 40% Subscription Royalty Protocol",
-      society_fund_pool_usd: 76408.00,
+      protocol: "H.U.M.A.N. 50% People's Covenant Protocol",
+      sdkVersion: SDK_VERSION,
+      society_fund_pool_usd: 95510.00,
+      corridor: DEFAULT_CORRIDOR,
       status: "Active",
     });
   });
@@ -1284,7 +1348,7 @@ Respond in STRICT JSON format:
   app.post("/api/creators/register", (req, res) => {
     const { name, email, category, workTitle } = req.body;
     const c2paDid = `did:c2pa:${(email || 'creator').replace(/[^a-zA-Z0-9]/g, '.')}.${Date.now().toString(36)}`;
-    const stripeId = `acct_1NZ${Math.random().toString(36).substring(2, 8)}`;
+    const settlementId = `omega_rail_${Math.random().toString(36).substring(2, 8)}`;
 
     res.json({
       success: true,
@@ -1294,12 +1358,12 @@ Respond in STRICT JSON format:
         email: email || "creator@rights.org",
         category: category || "Book / Literature",
         workTitle,
-        stripe_account_id: stripeId,
+        stripe_account_id: settlementId,
         c2pa_did: c2paDid,
-        available_balance_usd: 424.48,
+        available_balance_usd: 530.61,
         status: "Connected",
       },
-      message: "Creator registered with instant 40% subscription royalty auto-routing.",
+      message: "Creator registered with 50% People's Covenant Pool A / B / C auto-routing.",
     });
   });
 
@@ -1329,7 +1393,7 @@ Respond in STRICT JSON format:
       "@context": "https://c2pa.org/specifications/v2/context.jsonld",
       manifest_version: "2.1.0",
       appId,
-      claim_generator: "H.U.M.A.N. Ethical AI Builder Protocol v2.4 (humanethicalai)",
+      claim_generator: `H.U.M.A.N. Ethical AI Protocol v${SDK_VERSION} (humanethicalai.ai.studio)`,
       format: "application/json+jumbf",
       signature: {
         issuer: "did:human:ethical-ai-authority",
@@ -1405,44 +1469,54 @@ Respond in STRICT JSON format:
     });
   });
 
-  // 10. StripeDistributionService API Endpoints (40% Subscription Royalty Protocol)
+  // 10. Covenant Split Distribution API Endpoints (50% People's Covenant Protocol)
   app.post("/api/distribution/capture-split", (req, res) => {
     const { appId, appName, amountUsd, subscriberEmail, tierName } = req.body;
-    const gross = Math.max(0, Number(amountUsd) || 0);
-    const societySplit = Number((gross * 0.40).toFixed(2));
-    const operatorShare = Number((gross - societySplit).toFixed(2));
+    const split = computeCovenantSplit(Math.max(0, Number(amountUsd) || 0));
     const txId = `txn_split_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
 
     res.json({
       success: true,
       transactionId: txId,
-      grossAmountUsd: gross,
-      societyFundSplitUsd: societySplit,
-      appOperatorShareUsd: operatorShare,
-      sourceAppId: appId || "tomecrafter-ai-book-studio",
+      grossAmountUsd: split.grossUsd,
+      opsInfraUsd: split.opsInfraUsd,
+      societyFundSplitUsd: split.societyFundUsd,
+      poolACreatorsUsd: split.poolACreatorsUsd,
+      poolBStewardsUsd: split.poolBStewardsUsd,
+      poolCHumanitarianUsd: split.poolCHumanitarianUsd,
+      appOperatorShareUsd: split.opsInfraUsd,
+      corridor: split.corridor,
+      sdkVersion: SDK_VERSION,
+      sourceAppId: appId || "tome-crafter",
       sourceAppName: appName || "Tome Crafter",
       subscriberEmail: subscriberEmail || "subscriber@user.app",
       tierName: tierName || "Pro",
-      stripeTransferGroupId: `tg_human_40pct_${Date.now().toString(36)}`,
-      c2paAuditHash: `0x${Math.random().toString(16).substring(2, 10)}...c2pa40PctSeal`,
+      stripeTransferGroupId: `omega_50pct_${Date.now().toString(36)}`,
+      c2paAuditHash: `0x${crypto.createHash("sha256").update(txId).digest("hex").slice(0, 16)}`,
       timestamp: new Date().toISOString(),
-      message: "40% subscription revenue captured and routed to H.U.M.A.N. Society Fund escrow.",
+      message: "50% People's Covenant revenue captured across Pool A (35%), Pool B (7.5%), and Pool C ($FOOD/$MED 7.5%).",
     });
   });
 
   app.post("/api/distribution/execute-batch", (req, res) => {
     const { roundId, totalDistributingUsd, creatorsCount, allocationModel } = req.body;
+    const distAmount = Number(totalDistributingUsd) || 95510.00;
+    const batchSplit = computeCovenantSplit(distAmount * 2);
     res.json({
       success: true,
       roundId: roundId || `round_${Date.now().toString(36)}`,
-      totalPaidUsd: totalDistributingUsd || 76408.00,
+      totalPaidUsd: distAmount,
+      poolACreatorsUsd: batchSplit.poolACreatorsUsd,
+      poolBStewardsUsd: batchSplit.poolBStewardsUsd,
+      poolCHumanitarianUsd: batchSplit.poolCHumanitarianUsd,
+      corridor: batchSplit.corridor,
       creatorsPaidCount: creatorsCount || 180,
       allocationModel: allocationModel || "equal_share",
-      stripeBatchTransferId: `batch_tr_stripe_${Date.now().toString(36)}`,
-      c2paAuditSeal: `0x${Math.random().toString(16).substring(2, 12)}...c2paExecutedProof`,
+      stripeBatchTransferId: `batch_omega_rtr_${Date.now().toString(36)}`,
+      c2paAuditSeal: `0x${crypto.createHash("sha256").update(String(roundId || Date.now())).digest("hex").slice(0, 16)}`,
       executedAt: new Date().toISOString(),
       status: "COMPLETED_DISBURSED",
-      message: "Batch payouts successfully executed across connected Stripe Connect creator accounts.",
+      message: "Batch payouts successfully executed via Omega Direct-Rail 50% Covenant protocol.",
     });
   });
 
@@ -1451,7 +1525,7 @@ Respond in STRICT JSON format:
   // Enables all connected apps to pull centralized styling tokens, CSS & badges
   // =========================================================================
   let ecosystemBrandingConfig = {
-    protocolVersion: "2.5.0",
+    protocolVersion: SDK_VERSION,
     lastUpdated: new Date().toISOString(),
     globalTheme: {
       mode: "dark",

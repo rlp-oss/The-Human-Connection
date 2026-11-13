@@ -30,7 +30,6 @@ import {
   Compass,
   Archive,
   Coins,
-  Fingerprint,
   Lock
 } from 'lucide-react';
 import { useTheme, ThemeMode, AccentPalette } from '../context/ThemeContext';
@@ -544,7 +543,7 @@ export const SideMenuTaskbar: React.FC<SideMenuTaskbarProps> = ({
                       className="p-2.5 rounded-xl bg-[#142320] hover:bg-[#1E3A33] border border-[#1E3A33] text-left text-[#A7F3D0] flex items-center gap-2 transition-colors cursor-pointer"
                     >
                       <CreditCard className="w-3.5 h-3.5 text-[#34D399]" />
-                      <span>Stripe Guide</span>
+                      <span>Omega /pay Guide</span>
                     </button>
 
                     <button
@@ -638,23 +637,6 @@ export const SideMenuTaskbar: React.FC<SideMenuTaskbarProps> = ({
                           <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500 text-slate-950 rounded-full font-bold">24-Word Vault</span>
                         </div>
                         <div className="text-[10px] text-emerald-200 font-normal">BIP-39 phrase challenge, dual SMS/Email OTP & Zero-Knowledge zk-KYC</div>
-                      </div>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        onNavigateTab('hunter');
-                        setIsSideMenuOpen(false);
-                      }}
-                      className="p-2.5 rounded-xl bg-gradient-to-r from-emerald-950 via-[#0A1F18] to-slate-950 hover:opacity-95 border border-emerald-400 text-left text-white flex items-center gap-2 transition-colors cursor-pointer font-bold col-span-2 shadow-sm"
-                    >
-                      <Fingerprint className="w-4 h-4 text-emerald-400" />
-                      <div className="flex-1">
-                        <div className="text-xs font-mono font-bold flex items-center gap-1.5">
-                          <span className="text-white">Hunter Guild & Treasure Hunt</span>
-                          <span className="text-[9px] px-1.5 py-0.2 bg-emerald-400 text-slate-950 rounded-full font-bold">15 Chapters</span>
-                        </div>
-                        <div className="text-[10px] text-emerald-200 font-normal">Proof-of-Humanity Registry, Google Auth Gateway & 15-Chapter cryptographic decoder</div>
                       </div>
                     </button>
 

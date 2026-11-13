@@ -191,7 +191,7 @@ export const AppMediaHub: React.FC<AppMediaHubProps> = ({
       glowColor: 'rgba(217, 70, 239, 0.4)',
       description: 'A professional-grade digital audio workstation featuring secure, stem-level attribution tracking. Harness advanced generation tools with a hardcoded promise that your unique acoustic signature is never ingested.',
       licenseStandard: 'C2PA JUMBF v2.1 Audio Compliant',
-      url: 'https://remix-lyria-studio-5954.ai.studio'
+      url: 'https://rlm-pro-studio.ai.studio'
     },
     {
       id: 'app-forge',

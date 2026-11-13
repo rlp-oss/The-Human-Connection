@@ -1,4 +1,8 @@
 export type PlatformRole = 
+  | '$FOOD'
+  | '$MED'
+  | '$CREW'
+  | 'Developer'
   | 'App Creator' 
   | 'OSS Maintainer' 
   | 'Artisan Author' 
@@ -6,7 +10,8 @@ export type PlatformRole =
   | 'Beta Tester';
 
 export type SubscriptionStatus = 
-  | 'Stripe Sandbox' 
+  | 'Omega Direct-Rail'
+  | 'Omega Verified'
   | 'Stripe Connect Active' 
   | 'Trial' 
   | 'Suspended' 
@@ -22,7 +27,7 @@ export interface CustomBadgeConfig {
   id: string;
   appName: string;
   tagline: string;
-  covenantPct: number; // e.g. 40
+  covenantPct: number; // e.g. 50
   verificationUrl: string;
   c2paHash: string;
   logoDataUrl?: string;
@@ -662,11 +667,11 @@ export interface GlobalMacroFundMetrics {
   annualPerpetualYieldPct: number; // 5.0%
   annualPerpetualDistributionUsd: number; // $225,000,000,000 ($225 Billion/year)
   allocations: {
-    creatorRestitutionAndMicroRoyaltiesUsd: number; // $90 Billion/year (40%)
-    globalHumanDividendAndPovertyEliminationUsd: number; // $67.5 Billion/year (30%)
-    decentralizedSovereignComputeCommonsUsd: number; // $33.75 Billion/year (15%)
-    openSourcePublicGoodsAndEducationUsd: number; // $22.5 Billion/year (10%)
-    carbonAndEthicalValidationBufferUsd: number; // $11.25 Billion/year (5%)
+    creatorRestitutionAndMicroRoyaltiesUsd: number; // 50% People's Covenant (Pool A 35% + Pool B 7.5% + Pool C 7.5%)
+    globalHumanDividendAndPovertyEliminationUsd: number; // Universal Living Dividend
+    decentralizedSovereignComputeCommonsUsd: number; // Compute Commons
+    openSourcePublicGoodsAndEducationUsd: number; // Public Goods
+    carbonAndEthicalValidationBufferUsd: number; // Validation Reserve
   };
   globalComparisons: Array<{
     label: string;

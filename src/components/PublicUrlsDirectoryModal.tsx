@@ -18,7 +18,6 @@ import {
   Sparkles,
   BookOpen,
   Radio,
-  Fingerprint,
   Plus,
   Pencil
 } from 'lucide-react';
@@ -96,18 +95,6 @@ const DIRECTORY_ITEMS: NavDirectoryItem[] = [
     badgeColor: 'bg-teal-500/20 text-teal-300 border-teal-500/30',
     icon: Store
   },
-  {
-    id: 'hunter',
-    title: 'Hunter Guild & 15-Chapter Treasure Hunt',
-    category: 'public',
-    audience: 'Treasure Seekers, Hunters & Codebreakers',
-    urlPath: '/hunter or ?tab=hunter (#hunter)',
-    description: 'The underground coordination node and 15-chapter cryptographic proof-of-humanity decoder with Google Sign-In and progress telemetry.',
-    badge: '15 Chapters',
-    badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-    icon: Fingerprint
-  },
-
   // 2. Creators & Rightsholders
   {
     id: 'portal',
@@ -122,12 +109,12 @@ const DIRECTORY_ITEMS: NavDirectoryItem[] = [
   },
   {
     id: 'payouts',
-    title: 'Creator Payouts & Stripe Connect',
+    title: 'Creator Payouts & 50% Covenant Direct-Rail',
     category: 'creators',
     audience: 'Verified Creators & Rights Owners',
     urlPath: '/payouts or ?tab=payouts',
-    description: 'Live Stripe Connect micro-payout engine streaming 50% subscription allocations directly to connected bank accounts and debit cards.',
-    badge: 'Direct Connect',
+    description: 'Sovereign Omega Direct-Rail (/pay) payout engine splitting 50% People\'s Covenant funds across Pool A (35%), Pool B (7.5%), and Pool C $FOOD/$MED (7.5%).',
+    badge: 'Omega Direct-Rail',
     badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
     icon: Landmark
   },
@@ -157,12 +144,12 @@ const DIRECTORY_ITEMS: NavDirectoryItem[] = [
   },
   {
     id: 'stripe-guide',
-    title: 'Stripe Integration Guide & Webhooks',
+    title: 'Omega Direct-Rail /pay & Signed Webhook Guide',
     category: 'developers',
     audience: 'Backend Engineers & Payment Admins',
-    urlPath: '/stripe-guide or ?tab=stripe-guide',
-    description: 'Step-by-step implementation guide for configuring Stripe webhook events, destination charges, and cryptographic escrow signatures.',
-    badge: 'Webhook Docs',
+    urlPath: '/omega-guide or ?tab=stripe-guide',
+    description: 'Implementation guide for server-signed Omega Direct-Rail /pay checkouts, X-Omega-Signature HMAC verification, and C2PA record syncing.',
+    badge: 'Webhook & /pay',
     badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
     icon: CreditCard
   },
@@ -203,11 +190,11 @@ const DIRECTORY_ITEMS: NavDirectoryItem[] = [
   },
   {
     id: 'testers',
-    title: 'Beta Tester CRM & Onboarding Console',
+    title: 'Beta Tester & Contributor Onboarding Console',
     category: 'admin',
     audience: 'Product Managers & Internal Admins',
     urlPath: '/testers or ?tab=testers',
-    description: 'Manage the 5 beta testers across the 4 fleet apps (Tome Crafter, RLM Pro, ForgeOS, Easy Flow), trigger welcome emails, and reset sandbox.',
+    description: 'Manage contributors across the fleet apps ($FOOD, $MED, $CREW, Developer), launch signed Omega /pay checkouts, and reset sessions via Omega Hub.',
     badge: 'Internal Admin',
     badgeColor: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
     icon: Users
