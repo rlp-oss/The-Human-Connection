@@ -30,10 +30,16 @@ import {
   Compass,
   Archive,
   Coins,
-  Lock
+  Lock,
+  Clock,
+  RefreshCw,
+  AlertTriangle,
+  ShieldAlert
 } from 'lucide-react';
 import { useTheme, ThemeMode, AccentPalette } from '../context/ThemeContext';
 import { useOwnerAuth } from '../utils/ownerAuth';
+import { useSessionTtl } from '../services/sessionTtlService';
+import { formatDurationMmSs } from './SessionTtlAlertModal';
 import { EmeraldHumanNetworkLogoIcon, HumanInitiativeLogo } from './HumanLogo';
 import { generateInitiativeClientPythonCode } from '../services/humanInitiativeData';
 import { ActiveTab } from './Navbar';
@@ -71,6 +77,17 @@ export const SideMenuTaskbar: React.FC<SideMenuTaskbarProps> = ({
     setIsTaskbarPinned
   } = useTheme();
   const { isOwner } = useOwnerAuth();
+  const {
+    isAuthenticated: isSessionAuthenticated,
+    status: sessionStatus,
+    remainingSeconds: sessionRemainingSeconds,
+    activeExpiresAtMs: sessionExpiresAtMs,
+    strictWindowSeconds,
+    isRenewing: isSessionRenewing,
+    openModal: openSessionTtlModal,
+    renewSession,
+    setStrictWindowSeconds,
+  } = useSessionTtl();
 
   // Python SDK Interactive Sandbox State
   const [selectedAppSource, setSelectedAppSource] = useState<string>('ForgeOS App Builder');
@@ -374,6 +391,124 @@ export const SideMenuTaskbar: React.FC<SideMenuTaskbarProps> = ({
 
               {/* SCROLLABLE TOOL & TASKBAR BODY */}
               <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-6 scrollbar-thin">
+
+                <div className="rounded-xl border border-[#1E3A33] bg-[#0E1A17] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      {sessionStatus === 'expired' ? (
+                        <ShieldAlert className="w-4 h-4 text-red-400 shrink-0" />
+                      ) : sessionStatus === 'warning_60s' ? (
+                        <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      ) : (
+                        <Clock className="w-4 h-4 text-[#34D399] shrink-0" />
+                      )}
+                      <h3 className="text-xs font-mono font-bold text-[#F0FDF4]">
+                        Session TTL & JIT Credentials
+                      </h3>
+                    </div>
+                    <span
+                      className={`text-[11px] font-mono font-semibold ${
+                        sessionStatus === 'expired'
+                          ? 'text-red-400'
+                          : sessionStatus === 'warning_60s'
+                            ? 'text-amber-400'
+                            : isSessionAuthenticated
+                              ? 'text-[#34D399]'
+                              : 'text-[#94A3B8]'
+                      }`}
+                    >
+                      {sessionStatus === 'expired'
+                        ? 'Expired'
+                        : sessionStatus === 'warning_60s'
+                          ? '60s Warning'
+                          : isSessionAuthenticated
+                            ? 'Active'
+                            : 'Signed Out'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between gap-2 border-t border-b border-[#1E3A33]/70 py-2.5">
+                    <div>
+                      <div className="text-[11px] text-[#94A3B8]">Remaining JIT Window</div>
+                      <div className="text-xl font-mono font-bold tabular-nums text-[#F0FDF4]">
+                        {sessionStatus === 'expired'
+                          ? '00:00'
+                          : isSessionAuthenticated
+                            ? formatDurationMmSs(sessionRemainingSeconds)
+                            : '--:--'}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] text-[#94A3B8]">Expires At</div>
+                      <div className="text-xs font-mono tabular-nums text-[#A7F3D0]">
+                        {sessionExpiresAtMs
+                          ? new Date(sessionExpiresAtMs).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                            })
+                          : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isSessionAuthenticated && (
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between text-[11px] text-[#94A3B8]">
+                        <span>JIT Ceiling</span>
+                        <span>Modal triggers at 60s</span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-[#0A1412] border border-[#1E3A33]">
+                        {[
+                          { label: '60m', seconds: null },
+                          { label: '15m', seconds: 900 },
+                          { label: '5m', seconds: 300 },
+                          { label: '65s', seconds: 65 },
+                        ].map((opt) => {
+                          const selected = strictWindowSeconds === opt.seconds;
+                          return (
+                            <button
+                              key={opt.label}
+                              type="button"
+                              onClick={() => setStrictWindowSeconds(opt.seconds)}
+                              className={`py-1 rounded text-[11px] font-mono transition-colors cursor-pointer ${
+                                selected
+                                  ? 'bg-[#064E3B] text-[#34D399] font-bold'
+                                  : 'text-[#94A3B8] hover:text-[#F0FDF4]'
+                              }`}
+                            >
+                              {opt.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openSessionTtlModal();
+                        setIsSideMenuOpen(false);
+                      }}
+                      className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#142320] hover:bg-[#1E3A33] border border-[#1E3A33] text-[#A7F3D0] text-xs font-mono font-medium transition-colors cursor-pointer whitespace-nowrap"
+                    >
+                      Inspect TTL
+                    </button>
+                    {isSessionAuthenticated && (
+                      <button
+                        type="button"
+                        onClick={() => void renewSession()}
+                        disabled={isSessionRenewing}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg bg-[#10B981] hover:bg-[#059669] text-[#0B1311] text-xs font-mono font-bold flex items-center justify-center gap-1 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isSessionRenewing ? 'animate-spin' : ''}`} />
+                        <span>{isSessionRenewing ? 'Renewing...' : 'Renew Token'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
                 
                 {/* ========================================================================= */}
                 {/* 2. OFFICIAL PYTHON SDK TOOL (`human_initiative`) */}

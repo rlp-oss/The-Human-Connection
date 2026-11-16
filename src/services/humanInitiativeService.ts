@@ -33,7 +33,7 @@ const STORAGE_KEYS = {
   POS_SCANS: 'human_initiative_pos_scans_v1',
   APP_SIGNIFICANCE: 'human_initiative_app_significance_v1',
   SLIDING_SCALE_CONFIG: 'human_initiative_sliding_scale_v1',
-  ECOSYSTEM_APPS: 'human_initiative_ecosystem_apps_v1',
+  ECOSYSTEM_APPS: 'human_initiative_ecosystem_apps_v2',
 };
 
 function loadStorage<T>(key: string, fallback: T): T {

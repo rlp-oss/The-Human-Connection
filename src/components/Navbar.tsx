@@ -38,6 +38,7 @@ import { HumanLogo, HumanProtocolLogo } from './HumanLogo';
 import { TopUninvasiveTrustBadge } from './UninvasiveTrustBadge';
 import { PublicUrlsDirectoryModal } from './PublicUrlsDirectoryModal';
 import { GoogleAuthButton } from './GoogleAuthButton';
+import { SessionTtlNavbarIndicator } from './SessionTtlAlertModal';
 import { useTheme } from '../context/ThemeContext';
 import { useOwnerAuth } from '../utils/ownerAuth';
 
@@ -321,9 +322,11 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="sm:hidden">Tools</span>
             </button>
 
+            <SessionTtlNavbarIndicator />
+
             <button
               onClick={onOpenStripeModal}
-              className="hidden md:flex items-center gap-1 text-[11px] font-mono text-[#5A5A40] dark:text-[#A7F3D0] hover:text-[#2D2926] transition-colors bg-[#FFFFFF] dark:bg-[#142320] hover:bg-[#F2ECE4] dark:hover:bg-[#1E3A33] px-2.5 py-1 rounded-lg border border-[#DCD5CA] dark:border-[#1E3A33] shadow-2xs"
+              className="hidden md:flex items-center gap-1 text-[11px] font-mono text-[#5A5A40] dark:text-[#A7F3D0] hover:text-[#2D2926] transition-colors bg-[#FFFFFF] dark:bg-[#142320] hover:bg-[#F2ECE4] dark:hover:bg-[#1E3A33] px-2.5 py-1 rounded-lg border border-[#DCD5CA] dark:border-[#1E3A33] shadow-2xs whitespace-nowrap shrink-0"
               title="Omega Direct-Rail /pay & Signed Webhook Settings"
             >
               <Lock className="w-3 h-3 text-[#059669] dark:text-[#34D399]" />

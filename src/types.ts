@@ -69,6 +69,7 @@ export interface FiveYearRoiSimulation {
 
 export interface Tester {
   id: string;
+  ownerUid?: string;
   name: string;
   email: string;
   github_handle: string;
@@ -93,6 +94,7 @@ export type AssetType =
 
 export interface CopyrightClaim {
   id: string;
+  ownerUid?: string;
   title: string;
   creator_name: string;
   creator_email: string;
@@ -129,6 +131,7 @@ export interface FeedbackReply {
 
 export interface FeedbackItem {
   id: string;
+  ownerUid?: string;
   tester_id: string;
   tester_name: string;
   tester_email: string;

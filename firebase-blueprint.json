@@ -2,107 +2,226 @@
   "entities": {
     "Tester": {
       "title": "Tester",
-      "description": "Beta tester registered in the ethical AI testing console",
+      "description": "Beta tester or contributor registered in the H.U.M.A.N. Initiative console (contains PII)",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Tester ID" },
-        "name": { "type": "string", "maxLength": 100, "description": "Tester full name" },
-        "email": { "type": "string", "format": "email", "maxLength": 150, "description": "Tester email address" },
-        "app_access_list": { "type": "array", "description": "List of authorized apps (ShareShop Pro, Lyria Studio, ReForgeOS, etc.)" },
-        "current_subscription_status": { "type": "string", "description": "Current Stripe status (Stripe Sandbox, Active Patron, etc.)" },
-        "stripeSandboxAccountId": { "type": "string", "description": "Stripe sandbox account ID" },
-        "testBalanceCents": { "type": "number", "description": "Sandbox test balance in cents" },
-        "totalAccumulatedRoyaltiesSample": { "type": "number", "description": "Accumulated sample royalty balance" },
-        "createdAt": { "type": "string", "description": "Creation timestamp" },
-        "updatedAt": { "type": "string", "description": "Last update timestamp" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Tester document ID" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$", "description": "Firebase Auth UID of creator/owner" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100, "description": "Tester full name" },
+        "email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 150, "description": "Tester email address" },
+        "github_handle": { "type": "string", "maxLength": 100, "description": "GitHub handle" },
+        "role": {
+          "type": "string",
+          "enum": ["$FOOD", "$MED", "$CREW", "Developer", "App Creator", "OSS Maintainer", "Artisan Author", "Musician", "Beta Tester"],
+          "description": "Contributor role"
+        },
+        "app_access_list": { "type": "array", "description": "Authorized apps (max 10 items)" },
+        "current_subscription_status": {
+          "type": "string",
+          "enum": ["Omega Direct-Rail", "Omega Verified", "Stripe Connect Active", "Trial", "Suspended", "Active"],
+          "description": "Current subscription or checkout rail status"
+        },
+        "stripe_account_id": { "type": "string", "maxLength": 128, "description": "Connected payout rail identifier" },
+        "joined_at": { "type": "string", "minLength": 4, "maxLength": 64, "description": "ISO join timestamp" },
+        "total_royalties_received": { "type": "number", "description": "Cumulative royalties received in USD" },
+        "last_active": { "type": "string", "maxLength": 100, "description": "Last active label or timestamp" },
+        "license_keys": { "type": "object", "description": "Map of app name to license key" },
+        "notes": { "type": "string", "maxLength": 1000, "description": "Onboarding or steward notes" },
+        "email_welcomed": { "type": "boolean", "description": "Whether welcome email was sent" }
       },
-      "required": ["name", "email", "app_access_list", "current_subscription_status"]
+      "required": ["id", "ownerUid", "name", "email", "github_handle", "role", "app_access_list", "current_subscription_status", "stripe_account_id", "joined_at", "total_royalties_received", "last_active"]
     },
     "Feedback": {
       "title": "Feedback",
-      "description": "Tester bug report or feedback submission categorized by app",
+      "description": "Tester bug report or feedback submission categorized by app (contains PII)",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Feedback ID" },
-        "testerName": { "type": "string", "maxLength": 100 },
-        "testerEmail": { "type": "string", "format": "email" },
-        "appName": { "type": "string", "maxLength": 80 },
-        "rating": { "type": "number" },
-        "feedback": { "type": "string", "maxLength": 2000 },
-        "category": { "type": "string", "enum": ["bug", "feature", "praise", "general"] },
-        "timestamp": { "type": "string" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tester_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tester_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "tester_email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 150 },
+        "app_name": { "type": "string", "enum": ["Tome Crafter", "RLM Pro Studio", "ForgeOS App Builder", "RL Easy Flow"] },
+        "category": { "type": "string", "enum": ["Bug", "Feature Request", "Royalty Dispute", "UX & Flow", "General"] },
+        "severity": { "type": "string", "enum": ["Critical", "High", "Medium", "Low"] },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "content": { "type": "string", "minLength": 1, "maxLength": 4000 },
+        "status": { "type": "string", "enum": ["New", "In Review", "Resolved"] },
+        "created_at": { "type": "string", "minLength": 4, "maxLength": 64 },
+        "reply_history": { "type": "array", "description": "Thread replies (max 50 items)" }
       },
-      "required": ["testerName", "appName", "feedback"]
+      "required": ["id", "ownerUid", "tester_id", "tester_name", "tester_email", "app_name", "category", "severity", "subject", "content", "status", "created_at"]
     },
     "Broadcast": {
       "title": "Broadcast",
-      "description": "Cohort announcement sent to all testers assigned to a specific application",
+      "description": "Cohort announcement sent by Master Admin to testers",
       "type": "object",
       "properties": {
-        "id": { "type": "string", "description": "Broadcast ID" },
-        "appTarget": { "type": "string", "maxLength": 80 },
-        "subject": { "type": "string", "maxLength": 200 },
-        "bodyText": { "type": "string", "maxLength": 5000 },
-        "recipientCount": { "type": "number" },
-        "sentAt": { "type": "string" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "subject": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "body_text": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "target_app": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "recipients_count": { "type": "number" },
+        "sent_at": { "type": "string", "minLength": 4, "maxLength": 64 },
+        "status": { "type": "string", "enum": ["Delivered", "Queued"] },
+        "key_takeaways": { "type": "array", "description": "Up to 10 key summary takeaways" },
+        "sender_admin": { "type": "string", "minLength": 1, "maxLength": 120 }
       },
-      "required": ["appTarget", "subject", "bodyText"]
+      "required": ["id", "subject", "body_text", "target_app", "recipients_count", "sent_at", "status", "sender_admin"]
     },
     "CreatorClaim": {
       "title": "CreatorClaim",
-      "description": "Copyright and micro-royalty attribution claim registered by a human creator",
+      "description": "Copyright and micro-royalty attribution claim registered by a human creator (contains PII & payout balance)",
       "type": "object",
       "properties": {
-        "id": { "type": "string" },
-        "title": { "type": "string", "maxLength": 150 },
-        "creatorName": { "type": "string", "maxLength": 100 },
-        "assetType": { "type": "string" },
-        "attributionShareBps": { "type": "number" },
-        "verified": { "type": "boolean" },
-        "confidenceScore": { "type": "number" },
-        "stripeAccountId": { "type": "string" },
-        "createdAt": { "type": "string" }
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "creator_name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "creator_email": { "type": "string", "format": "email", "minLength": 3, "maxLength": 150 },
+        "asset_type": { "type": "string", "enum": ["Code Library", "Book / Literature", "Music / Audio", "Visual Art", "Scientific Algorithm"] },
+        "repository_or_source": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "evidence_description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["Verified", "Pending Review", "Disputed"] },
+        "confidence_score": { "type": "number" },
+        "attribution_share_bps": { "type": "number" },
+        "micro_rate_usd": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "bank_connected": { "type": "boolean" },
+        "stripe_account_id": { "type": "string", "maxLength": 128 },
+        "payout_balance_usd": { "type": "number" },
+        "total_payouts_claimed_usd": { "type": "number" },
+        "created_at": { "type": "string", "minLength": 4, "maxLength": 64 },
+        "analysis_notes": { "type": "string", "maxLength": 2000 }
       },
-      "required": ["title", "creatorName", "assetType"]
+      "required": ["id", "ownerUid", "title", "creator_name", "creator_email", "asset_type", "repository_or_source", "evidence_description", "status", "confidence_score", "attribution_share_bps", "micro_rate_usd", "bank_connected", "stripe_account_id", "payout_balance_usd", "total_payouts_claimed_usd", "created_at"]
     },
     "AppBadge": {
       "title": "AppBadge",
       "description": "C2PA manifest link and badge status configuration for an ethical AI app",
       "type": "object",
       "properties": {
-        "appId": { "type": "string" },
-        "developerName": { "type": "string" },
+        "appId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "developerName": { "type": "string", "maxLength": 120 },
         "isLinked": { "type": "boolean" },
         "isActivated": { "type": "boolean" },
         "royaltyBalance": { "type": "number" },
-        "c2paManifestHash": { "type": "string" },
-        "ftAuditId": { "type": "string" },
-        "storyIpAssetId": { "type": "string" },
-        "theme": { "type": "string" }
+        "c2paManifestHash": { "type": "string", "maxLength": 128 },
+        "ftAuditId": { "type": "string", "maxLength": 128 },
+        "storyIpAssetId": { "type": "string", "maxLength": 128 },
+        "theme": { "type": "string", "maxLength": 64 }
       },
       "required": ["appId", "isLinked", "isActivated"]
+    },
+    "SocietyFundMetrics": {
+      "title": "SocietyFundMetrics",
+      "description": "Singleton aggregate telemetry for the 50% People's Covenant Society Fund",
+      "type": "object",
+      "properties": {
+        "total_subscription_revenue_usd": { "type": "number" },
+        "society_fund_share_pct": { "type": "number" },
+        "total_society_fund_usd": { "type": "number" },
+        "unallocated_holding_escrow_usd": { "type": "number" },
+        "allocated_registered_pool_usd": { "type": "number" },
+        "total_active_subscribers": { "type": "number" },
+        "average_monthly_sub_price": { "type": "number" },
+        "per_subscriber_royalty_yield": { "type": "number" },
+        "estimated_payout_per_registered_creator": { "type": "number" },
+        "total_registered_creators": { "type": "number" },
+        "total_unregistered_claims": { "type": "number" },
+        "total_badge_integrated_apps": { "type": "number" },
+        "last_distribution_timestamp": { "type": "string", "minLength": 4, "maxLength": 64 }
+      },
+      "required": [
+        "total_subscription_revenue_usd",
+        "society_fund_share_pct",
+        "total_society_fund_usd",
+        "unallocated_holding_escrow_usd",
+        "allocated_registered_pool_usd",
+        "total_active_subscribers",
+        "average_monthly_sub_price",
+        "per_subscriber_royalty_yield",
+        "estimated_payout_per_registered_creator",
+        "total_registered_creators",
+        "total_unregistered_claims",
+        "total_badge_integrated_apps",
+        "last_distribution_timestamp"
+      ]
+    },
+    "CapturedSplit": {
+      "title": "CapturedSplit",
+      "description": "Immutable 50/50 People's Covenant split record captured on payment (contains subscriber PII)",
+      "type": "object",
+      "properties": {
+        "transactionId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "grossAmountUsd": { "type": "number" },
+        "societyFundSplitUsd": { "type": "number" },
+        "appOperatorShareUsd": { "type": "number" },
+        "estimatedStripeFeeUsd": { "type": "number" },
+        "sourceAppId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sourceAppName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "subscriberEmail": { "type": "string", "format": "email", "minLength": 3, "maxLength": 150 },
+        "stripeTransferGroupId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "c2paAuditHash": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "timestamp": { "type": "string", "minLength": 4, "maxLength": 64 },
+        "status": { "type": "string", "enum": ["Routed to Society Fund", "Pending Escrow Allocation"] }
+      },
+      "required": ["transactionId", "ownerUid", "grossAmountUsd", "societyFundSplitUsd", "appOperatorShareUsd", "estimatedStripeFeeUsd", "sourceAppId", "sourceAppName", "subscriberEmail", "stripeTransferGroupId", "c2paAuditHash", "timestamp", "status"]
+    },
+    "DistributionRound": {
+      "title": "DistributionRound",
+      "description": "Public Society Fund batch distribution audit record",
+      "type": "object",
+      "properties": {
+        "round_id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "timestamp": { "type": "string", "minLength": 4, "maxLength": 80 },
+        "total_distributed_usd": { "type": "number" },
+        "subscribers_at_execution": { "type": "number" },
+        "creators_paid_count": { "type": "number" },
+        "average_payout_per_creator": { "type": "number" },
+        "status": { "type": "string", "enum": ["Completed", "Processing", "Scheduled"] },
+        "stripe_batch_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "c2pa_audit_seal": { "type": "string", "minLength": 1, "maxLength": 128 }
+      },
+      "required": ["round_id", "timestamp", "total_distributed_usd", "subscribers_at_execution", "creators_paid_count", "average_payout_per_creator", "status", "stripe_batch_id", "c2pa_audit_seal"]
     }
   },
   "firestore": {
     "/testers/{testerId}": {
       "schema": { "$ref": "#/entities/Tester" },
-      "description": "Collection of all registered beta testers"
+      "description": "Registered beta testers and contributors (ownerUid + Master Admin PII isolated)"
     },
     "/feedbacks/{feedbackId}": {
       "schema": { "$ref": "#/entities/Feedback" },
-      "description": "Tester feedback and bug reports"
+      "description": "Tester feedback and bug reports (ownerUid + Master Admin PII isolated)"
     },
     "/broadcasts/{broadcastId}": {
       "schema": { "$ref": "#/entities/Broadcast" },
-      "description": "Sent broadcast messages to cohorts"
+      "description": "Cohort announcements authored exclusively by Master Admin"
     },
     "/creator_claims/{claimId}": {
       "schema": { "$ref": "#/entities/CreatorClaim" },
-      "description": "Registered artist and coder copyright claims"
+      "description": "Registered artist and coder copyright claims (ownerUid + Master Admin isolated)"
+    },
+    "/copyright_claims/{claimId}": {
+      "schema": { "$ref": "#/entities/CreatorClaim" },
+      "description": "Escrow-released copyright claims written by StripeDistributionService (ownerUid + Master Admin isolated)"
     },
     "/app_badges/{badgeId}": {
       "schema": { "$ref": "#/entities/AppBadge" },
-      "description": "App badge configurations and C2PA manifest records"
+      "description": "App badge configurations and C2PA manifest records (Master Admin write-only)"
+    },
+    "/society_metrics/{metricId}": {
+      "schema": { "$ref": "#/entities/SocietyFundMetrics" },
+      "description": "Singleton live_summary aggregate 50% Society Fund metrics (Master Admin write-only)"
+    },
+    "/captured_splits/{splitId}": {
+      "schema": { "$ref": "#/entities/CapturedSplit" },
+      "description": "Immutable 50/50 split audit records captured on subscription payments (Master Admin create-only)"
+    },
+    "/distribution_rounds/{roundId}": {
+      "schema": { "$ref": "#/entities/DistributionRound" },
+      "description": "Batch royalty distribution audit rounds (Master Admin write-only)"
     }
   }
 }

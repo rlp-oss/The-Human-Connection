@@ -18,14 +18,25 @@ googleProvider.addScope('https://www.googleapis.com/auth/drive.metadata.readonly
 
 // In-memory token cache (never stored in localStorage/sessionStorage per security guidelines)
 let cachedAccessToken: string | null = null;
+let cachedAccessTokenExpiresAt: number | null = null;
 let isSigningIn = false;
 
 export const getAccessToken = async (): Promise<string | null> => {
+  if (cachedAccessTokenExpiresAt && Date.now() >= cachedAccessTokenExpiresAt) {
+    cachedAccessToken = null;
+    cachedAccessTokenExpiresAt = null;
+    return null;
+  }
   return cachedAccessToken;
 };
 
-export const setCachedAccessToken = (token: string | null) => {
+export const getAccessTokenExpiry = (): number | null => {
+  return cachedAccessToken ? cachedAccessTokenExpiresAt : null;
+};
+
+export const setCachedAccessToken = (token: string | null, ttlSeconds: number = 3600) => {
   cachedAccessToken = token;
+  cachedAccessTokenExpiresAt = token ? Date.now() + ttlSeconds * 1000 : null;
 };
 
 export enum OperationType {
@@ -87,6 +98,7 @@ export async function signInWithGoogle(): Promise<{ user: any; accessToken: stri
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (credential?.accessToken) {
       cachedAccessToken = credential.accessToken;
+      cachedAccessTokenExpiresAt = Date.now() + 3600 * 1000;
     }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (err) {
@@ -99,5 +111,33 @@ export async function signInWithGoogle(): Promise<{ user: any; accessToken: stri
 
 export async function logOut() {
   cachedAccessToken = null;
+  cachedAccessTokenExpiresAt = null;
   return signOut(auth);
+}
+
+export async function getFirebaseAuthHeaders(): Promise<Record<string, string>> {
+  const user = auth.currentUser;
+  if (!user) return {};
+  try {
+    const idToken = await user.getIdToken();
+    return idToken ? { Authorization: `Bearer ${idToken}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function forceRefreshFirebaseToken(): Promise<{
+  idToken: string;
+  issuedAtMs: number;
+  expiresAtMs: number;
+} | null> {
+  const user = auth.currentUser;
+  if (!user) return null;
+  const idToken = await user.getIdToken(true);
+  const result = await user.getIdTokenResult();
+  return {
+    idToken,
+    issuedAtMs: Date.parse(result.issuedAtTime) || Date.now(),
+    expiresAtMs: Date.parse(result.expirationTime) || Date.now() + 3600 * 1000,
+  };
 }

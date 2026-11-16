@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { useTheme, ThemeMode, CustomColorProfile } from '../context/ThemeContext';
 import { EmeraldHumanNetworkLogoIcon } from './HumanLogo';
+import { getFirebaseAuthHeaders } from '../lib/firebase';
 import axios from 'axios';
 
 interface MasterAdminColorStudioProps {
@@ -102,20 +103,25 @@ export const MasterAdminColorStudio: React.FC<MasterAdminColorStudioProps> = ({
     setIsBroadcasting(true);
     setSaveStatus(null);
     try {
-      await axios.post('/api/ecosystem/theme/update', {
-        globalTheme: {
-          mode: mode,
-          primaryColor: draftColors.accentGreen,
-          secondaryColor: draftColors.accentCyan,
-          backgroundColor: draftColors.baseBg,
-          surfaceColor: draftColors.surfaceBg,
-          textColor: draftColors.textMain,
-          covenantPct: 50,
-          glowIntensity: draftColors.glowIntensity,
-          borderRadius: `${draftColors.borderRadius}px`,
-        }
-      });
-      setSaveStatus('Broadcasted active palette to all 4 ecosystem apps & updated remote CDN!');
+      const headers = await getFirebaseAuthHeaders();
+      await axios.post(
+        '/api/ecosystem/theme/update',
+        {
+          globalTheme: {
+            mode: mode,
+            primaryColor: draftColors.accentGreen,
+            secondaryColor: draftColors.accentCyan,
+            backgroundColor: draftColors.baseBg,
+            surfaceColor: draftColors.surfaceBg,
+            textColor: draftColors.textMain,
+            covenantPct: 50,
+            glowIntensity: draftColors.glowIntensity,
+            borderRadius: `${draftColors.borderRadius}px`,
+          }
+        },
+        { headers }
+      );
+      setSaveStatus('Broadcasted active palette to all ecosystem apps & updated remote CDN!');
     } catch (err) {
       setSaveStatus('Palette active locally and synchronized.');
     } finally {

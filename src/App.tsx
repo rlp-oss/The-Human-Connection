@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Navbar, ActiveTab } from './components/Navbar';
 import { TesterConsole } from './components/TesterConsole';
 import { OnboardingModal } from './components/OnboardingModal';
@@ -31,6 +31,7 @@ import { UniversalThemeHubModal } from './components/UniversalThemeHubModal';
 import { MasterAdminColorStudio } from './components/MasterAdminColorStudio';
 import { GoogleDriveManagerModal } from './components/GoogleDriveManagerModal';
 import { OwnerAuthModal } from './components/OwnerAuthModal';
+import { SessionTtlMonitorHost } from './components/SessionTtlAlertModal';
 import { ThemeProvider } from './context/ThemeContext';
 import { 
   Tester, 
@@ -49,7 +50,8 @@ import {
   BroadcastService, 
   SynthesisService 
 } from './services/api';
-import { testFirestoreConnection } from './lib/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, testFirestoreConnection } from './lib/firebase';
 import { 
   ShieldCheck, 
   Award, 
@@ -64,6 +66,8 @@ import {
   Database
 } from 'lucide-react';
 import { HumanLogo } from './components/HumanLogo';
+
+const BACKGROUND_POLL_INTERVAL_MS = 60_000;
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
@@ -223,9 +227,34 @@ function AppContent() {
     }
   };
 
-  const loadAllData = useCallback(async () => {
+  const isMountedRef = useRef(true);
+  const isLoadingDataRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
+  const lastPolledAtRef = useRef<number>(0);
+  const firestoreConnectedRef = useRef<boolean | null>(null);
+  const lastAuthUidRef = useRef<string | null>(auth.currentUser?.uid ?? null);
+
+  const loadAllData = useCallback(async (options?: { silent?: boolean; queueIfBusy?: boolean }) => {
+    const silent = options?.silent ?? false;
+    const queueIfBusy = options?.queueIfBusy ?? !silent;
+
+    if (isLoadingDataRef.current) {
+      if (queueIfBusy) {
+        pendingRefreshRef.current = true;
+      }
+      return;
+    }
+
+    isLoadingDataRef.current = true;
     try {
-      testFirestoreConnection().then(conn => setFirestoreConnected(conn));
+      if (!silent || firestoreConnectedRef.current === null) {
+        testFirestoreConnection().then((conn) => {
+          firestoreConnectedRef.current = conn;
+          if (isMountedRef.current) {
+            setFirestoreConnected(conn);
+          }
+        });
+      }
 
       const [
         fetchedTesters,
@@ -243,21 +272,85 @@ function AppContent() {
         SynthesisService.getSummary(),
       ]);
 
+      if (!isMountedRef.current) return;
+
       setTesters(fetchedTesters);
       setClaims(fetchedClaims);
       setFeedbackList(fetchedFeedback);
       setBroadcasts(fetchedBroadcasts);
       setRoyaltyEvents(fetchedEvents);
       setSummary(fetchedSummary);
+      lastPolledAtRef.current = Date.now();
     } catch (e) {
       console.error('Error loading data:', e);
     } finally {
-      setIsLoading(false);
+      isLoadingDataRef.current = false;
+      if (!silent && isMountedRef.current) {
+        setIsLoading(false);
+      }
+      if (pendingRefreshRef.current && isMountedRef.current) {
+        pendingRefreshRef.current = false;
+        void loadAllData({ silent: true, queueIfBusy: false });
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadAllData();
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    void loadAllData();
+
+    const pollTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadAllData({ silent: true });
+      }
+    }, BACKGROUND_POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (
+        document.visibilityState === 'visible' &&
+        Date.now() - lastPolledAtRef.current >= BACKGROUND_POLL_INTERVAL_MS
+      ) {
+        void loadAllData({ silent: true });
+      }
+    };
+
+    const handleStorageSync = (event: StorageEvent) => {
+      if (
+        event.key &&
+        (event.key.startsWith('human_testers_') ||
+          event.key.startsWith('human_claims_') ||
+          event.key.startsWith('human_feedback_') ||
+          event.key.startsWith('human_broadcasts_') ||
+          event.key.startsWith('human_royalty_events_') ||
+          event.key.startsWith('human_summary_'))
+      ) {
+        void loadAllData({ silent: true, queueIfBusy: true });
+      }
+    };
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      const nextUid = user?.uid ?? null;
+      if (nextUid !== lastAuthUidRef.current) {
+        lastAuthUidRef.current = nextUid;
+        void loadAllData({ silent: true, queueIfBusy: true });
+      }
+    });
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('storage', handleStorageSync);
+
+    return () => {
+      window.clearInterval(pollTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('storage', handleStorageSync);
+      unsubscribeAuth();
+    };
   }, [loadAllData]);
 
   const handleOpenBroadcastForApp = (app: AppName) => {
@@ -585,6 +678,9 @@ function AppContent() {
         onClose={() => setIsOwnerAuthModalOpen(false)}
         onVerified={() => setIsOwnerAuthModalOpen(false)}
       />
+
+      {/* Global Session TTL 60s Pre-Termination Monitor & Alert Modal */}
+      <SessionTtlMonitorHost />
 
       {/* Hideable Side Menu Tool and Task Bar (hidden in ?embed=1 chromeless mode) */}
       {!isEmbedMode && (

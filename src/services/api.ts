@@ -3,11 +3,14 @@ import {
   collection, 
   doc, 
   getDocs, 
+  query,
+  where,
   setDoc, 
   deleteDoc, 
   updateDoc 
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { auth, db, getFirebaseAuthHeaders, handleFirestoreError, OperationType } from '../lib/firebase';
+import { isUserMasterAdmin } from '../utils/ownerAuth';
 import { 
   Tester, 
   CopyrightClaim, 
@@ -92,6 +95,12 @@ function saveToStorage<T>(key: string, data: T): void {
   }
 }
 
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+}
+
 // Axios instance with base configuration
 export const apiClient = axios.create({
   baseURL: '',
@@ -101,26 +110,44 @@ export const apiClient = axios.create({
   timeout: 25000,
 });
 
+apiClient.interceptors.request.use(async (config) => {
+  const authHeaders = await getFirebaseAuthHeaders();
+  if (authHeaders.Authorization) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = authHeaders.Authorization;
+  }
+  return config;
+});
+
 export const TesterService = {
   async getTesters(): Promise<Tester[]> {
     try {
-      if (db) {
-        const snap = await getDocs(collection(db, 'testers'));
+      const currentUser = auth.currentUser;
+      if (db && currentUser?.emailVerified) {
+        const isAdmin = isUserMasterAdmin(currentUser);
+        const q = isAdmin
+          ? collection(db, 'testers')
+          : query(collection(db, 'testers'), where('ownerUid', '==', currentUser.uid));
+        const snap = await getDocs(q);
         if (!snap.empty) {
           const remoteTesters = snap.docs.map(d => ({ ...d.data(), id: d.id } as Tester));
           saveToStorage(STORAGE_KEYS.TESTERS, remoteTesters);
           return remoteTesters;
-        } else {
-          // Sync initial seed data to Firestore
+        } else if (isAdmin) {
           const localTesters = loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
           for (const t of localTesters) {
-            setDoc(doc(db, 'testers', t.id), t).catch(() => {});
+            const payload = { ...t, ownerUid: t.ownerUid || currentUser.uid };
+            setDoc(doc(db, 'testers', t.id), payload).catch(err =>
+              handleFirestoreError(err, OperationType.WRITE, `testers/${t.id}`)
+            );
           }
           return localTesters;
         }
       }
     } catch (err) {
-      console.warn('Firestore fetch testers fallback to local storage:', err);
+      if (auth.currentUser?.emailVerified) {
+        handleFirestoreError(err, OperationType.LIST, 'testers');
+      }
     }
     return loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
   },
@@ -128,9 +155,12 @@ export const TesterService = {
   async addTester(newTester: Omit<Tester, 'id' | 'joined_at' | 'total_royalties_received' | 'last_active'>): Promise<Tester> {
     const testers = loadFromStorage<Tester[]>(STORAGE_KEYS.TESTERS, INITIAL_TESTERS);
     const id = `tst_${Date.now().toString(36)}`;
+    const currentUser = auth.currentUser;
+    const isAdmin = isUserMasterAdmin(currentUser);
     const created: Tester = {
       ...newTester,
       id,
+      ownerUid: currentUser?.uid || 'local_guest',
       joined_at: new Date().toISOString(),
       total_royalties_received: 0,
       last_active: 'Just joined',
@@ -145,13 +175,22 @@ export const TesterService = {
     testers.unshift(created);
     saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-    // Sync to Firestore & Omega Hub Contributors collection
-    try {
-      if (db) {
-        await setDoc(doc(db, 'testers', id), created);
+    if (db && currentUser?.emailVerified) {
+      try {
+        const firestoreDoc: Tester = isAdmin
+          ? created
+          : {
+              ...created,
+              ownerUid: currentUser.uid,
+              role: 'Beta Tester',
+              total_royalties_received: 0,
+              current_subscription_status:
+                created.current_subscription_status === 'Omega Direct-Rail' ? 'Omega Direct-Rail' : 'Trial',
+            };
+        await setDoc(doc(db, 'testers', id), stripUndefined(firestoreDoc));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `testers/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore save tester sync error:', err);
     }
 
     try {
@@ -177,12 +216,13 @@ export const TesterService = {
     testers[index] = { ...testers[index], ...updates };
     saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-    try {
-      if (db) {
-        await updateDoc(doc(db, 'testers', id), updates as any);
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified) {
+      try {
+        await updateDoc(doc(db, 'testers', id), updates as Record<string, unknown>);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `testers/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore update tester error:', err);
     }
 
     return testers[index];
@@ -193,12 +233,13 @@ export const TesterService = {
     testers = testers.filter(t => t.id !== id);
     saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-    try {
-      if (db) {
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await deleteDoc(doc(db, 'testers', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `testers/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore delete tester error:', err);
     }
 
     return true;
@@ -243,13 +284,18 @@ export const TesterService = {
       tester.last_active = 'Checkout initiated via Omega /pay';
       saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-      if (db) {
-        await updateDoc(doc(db, 'testers', testerId), {
-          app_access_list: tester.app_access_list,
-          license_keys: tester.license_keys,
-          current_subscription_status: tester.current_subscription_status,
-          last_active: tester.last_active,
-        }).catch(() => {});
+      const currentUser = auth.currentUser;
+      if (db && currentUser?.emailVerified) {
+        try {
+          await updateDoc(doc(db, 'testers', testerId), {
+            app_access_list: tester.app_access_list,
+            license_keys: tester.license_keys,
+            current_subscription_status: tester.current_subscription_status,
+            last_active: tester.last_active,
+          });
+        } catch (err) {
+          handleFirestoreError(err, OperationType.UPDATE, `testers/${testerId}`);
+        }
       }
     }
 
@@ -278,11 +324,16 @@ export const TesterService = {
         tester.last_active = 'Session reset via Omega';
         saveToStorage(STORAGE_KEYS.TESTERS, testers);
 
-        if (db) {
-          await updateDoc(doc(db, 'testers', testerId), {
-            current_subscription_status: 'Omega Direct-Rail',
-            last_active: tester.last_active,
-          }).catch(() => {});
+        const currentUser = auth.currentUser;
+        if (db && currentUser?.emailVerified) {
+          try {
+            await updateDoc(doc(db, 'testers', testerId), {
+              current_subscription_status: 'Omega Direct-Rail',
+              last_active: tester.last_active,
+            });
+          } catch (err) {
+            handleFirestoreError(err, OperationType.UPDATE, `testers/${testerId}`);
+          }
         }
       }
 
@@ -300,22 +351,32 @@ export const TesterService = {
 export const ClaimService = {
   async getClaims(): Promise<CopyrightClaim[]> {
     try {
-      if (db) {
-        const snap = await getDocs(collection(db, 'creator_claims'));
+      const currentUser = auth.currentUser;
+      if (db && currentUser?.emailVerified) {
+        const isAdmin = isUserMasterAdmin(currentUser);
+        const q = isAdmin
+          ? collection(db, 'creator_claims')
+          : query(collection(db, 'creator_claims'), where('ownerUid', '==', currentUser.uid));
+        const snap = await getDocs(q);
         if (!snap.empty) {
           const remote = snap.docs.map(d => ({ ...d.data(), id: d.id } as CopyrightClaim));
           saveToStorage(STORAGE_KEYS.CLAIMS, remote);
           return remote;
-        } else {
+        } else if (isAdmin) {
           const localClaims = loadFromStorage<CopyrightClaim[]>(STORAGE_KEYS.CLAIMS, INITIAL_CLAIMS);
           for (const c of localClaims) {
-            setDoc(doc(db, 'creator_claims', c.id), c).catch(() => {});
+            const payload = { ...c, ownerUid: c.ownerUid || currentUser.uid };
+            setDoc(doc(db, 'creator_claims', c.id), payload).catch(err =>
+              handleFirestoreError(err, OperationType.WRITE, `creator_claims/${c.id}`)
+            );
           }
           return localClaims;
         }
       }
     } catch (err) {
-      console.warn('Firestore fetch claims fallback:', err);
+      if (auth.currentUser?.emailVerified) {
+        handleFirestoreError(err, OperationType.LIST, 'creator_claims');
+      }
     }
     return loadFromStorage<CopyrightClaim[]>(STORAGE_KEYS.CLAIMS, INITIAL_CLAIMS);
   },
@@ -334,21 +395,33 @@ export const ClaimService = {
   async addClaim(newClaim: Omit<CopyrightClaim, 'id' | 'created_at' | 'total_payouts_claimed_usd'>): Promise<CopyrightClaim> {
     const claims = loadFromStorage<CopyrightClaim[]>(STORAGE_KEYS.CLAIMS, INITIAL_CLAIMS);
     const id = `clm_${Date.now().toString(36)}`;
+    const currentUser = auth.currentUser;
+    const isAdmin = isUserMasterAdmin(currentUser);
     const created: CopyrightClaim = {
       ...newClaim,
       id,
+      ownerUid: currentUser?.uid || 'local_guest',
       created_at: new Date().toISOString(),
       total_payouts_claimed_usd: 0,
     };
     claims.unshift(created);
     saveToStorage(STORAGE_KEYS.CLAIMS, claims);
 
-    try {
-      if (db) {
-        await setDoc(doc(db, 'creator_claims', id), created);
+    if (db && currentUser?.emailVerified) {
+      try {
+        const firestoreDoc: CopyrightClaim = isAdmin
+          ? created
+          : {
+              ...created,
+              ownerUid: currentUser.uid,
+              status: 'Pending Review',
+              payout_balance_usd: 0,
+              total_payouts_claimed_usd: 0,
+            };
+        await setDoc(doc(db, 'creator_claims', id), stripUndefined(firestoreDoc));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `creator_claims/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore save claim error:', err);
     }
 
     return created;
@@ -363,15 +436,16 @@ export const ClaimService = {
     claim.total_payouts_claimed_usd += amountUsd;
     saveToStorage(STORAGE_KEYS.CLAIMS, claims);
 
-    try {
-      if (db) {
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await updateDoc(doc(db, 'creator_claims', claimId), {
           payout_balance_usd: claim.payout_balance_usd,
           total_payouts_claimed_usd: claim.total_payouts_claimed_usd,
         });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `creator_claims/${claimId}`);
       }
-    } catch (err) {
-      console.warn('Firestore update claim payout error:', err);
     }
 
     return true;
@@ -381,22 +455,32 @@ export const ClaimService = {
 export const FeedbackService = {
   async getFeedback(): Promise<FeedbackItem[]> {
     try {
-      if (db) {
-        const snap = await getDocs(collection(db, 'feedbacks'));
+      const currentUser = auth.currentUser;
+      if (db && currentUser?.emailVerified) {
+        const isAdmin = isUserMasterAdmin(currentUser);
+        const q = isAdmin
+          ? collection(db, 'feedbacks')
+          : query(collection(db, 'feedbacks'), where('ownerUid', '==', currentUser.uid));
+        const snap = await getDocs(q);
         if (!snap.empty) {
           const remote = snap.docs.map(d => ({ ...d.data(), id: d.id } as FeedbackItem));
           saveToStorage(STORAGE_KEYS.FEEDBACK, remote);
           return remote;
-        } else {
+        } else if (isAdmin) {
           const localFeedback = loadFromStorage<FeedbackItem[]>(STORAGE_KEYS.FEEDBACK, INITIAL_FEEDBACK);
           for (const f of localFeedback) {
-            setDoc(doc(db, 'feedbacks', f.id), f).catch(() => {});
+            const payload = { ...f, ownerUid: f.ownerUid || currentUser.uid };
+            setDoc(doc(db, 'feedbacks', f.id), payload).catch(err =>
+              handleFirestoreError(err, OperationType.WRITE, `feedbacks/${f.id}`)
+            );
           }
           return localFeedback;
         }
       }
     } catch (err) {
-      console.warn('Firestore fetch feedback fallback:', err);
+      if (auth.currentUser?.emailVerified) {
+        handleFirestoreError(err, OperationType.LIST, 'feedbacks');
+      }
     }
     return loadFromStorage<FeedbackItem[]>(STORAGE_KEYS.FEEDBACK, INITIAL_FEEDBACK);
   },
@@ -404,21 +488,23 @@ export const FeedbackService = {
   async addFeedback(item: Omit<FeedbackItem, 'id' | 'created_at' | 'status'>): Promise<FeedbackItem> {
     const list = loadFromStorage<FeedbackItem[]>(STORAGE_KEYS.FEEDBACK, INITIAL_FEEDBACK);
     const id = `fb_${Date.now().toString(36)}`;
+    const currentUser = auth.currentUser;
     const created: FeedbackItem = {
       ...item,
       id,
+      ownerUid: currentUser?.uid || 'local_guest',
       created_at: new Date().toISOString(),
       status: 'New',
     };
     list.unshift(created);
     saveToStorage(STORAGE_KEYS.FEEDBACK, list);
 
-    try {
-      if (db) {
-        await setDoc(doc(db, 'feedbacks', id), created);
+    if (db && currentUser?.emailVerified) {
+      try {
+        await setDoc(doc(db, 'feedbacks', id), stripUndefined({ ...created, ownerUid: currentUser.uid }));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `feedbacks/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore save feedback error:', err);
     }
 
     return created;
@@ -431,12 +517,13 @@ export const FeedbackService = {
     item.status = status;
     saveToStorage(STORAGE_KEYS.FEEDBACK, list);
 
-    try {
-      if (db) {
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await updateDoc(doc(db, 'feedbacks', id), { status });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `feedbacks/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore update feedback status error:', err);
     }
 
     return item;
@@ -457,15 +544,16 @@ export const FeedbackService = {
     }
     saveToStorage(STORAGE_KEYS.FEEDBACK, list);
 
-    try {
-      if (db) {
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await updateDoc(doc(db, 'feedbacks', id), { 
           reply_history: item.reply_history,
           status: item.status
         });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `feedbacks/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore add reply error:', err);
     }
 
     return item;
@@ -476,21 +564,30 @@ export const BroadcastService = {
   async getBroadcasts(): Promise<BroadcastMessage[]> {
     try {
       if (db) {
-        const snap = await getDocs(collection(db, 'broadcasts'));
+        const currentUser = auth.currentUser;
+        const isAdmin = isUserMasterAdmin(currentUser);
+        const q = isAdmin
+          ? collection(db, 'broadcasts')
+          : query(collection(db, 'broadcasts'), where('status', '==', 'Delivered'));
+        const snap = await getDocs(q);
         if (!snap.empty) {
           const remote = snap.docs.map(d => ({ ...d.data(), id: d.id } as BroadcastMessage));
           saveToStorage(STORAGE_KEYS.BROADCASTS, remote);
           return remote;
-        } else {
+        } else if (isAdmin) {
           const localBroadcasts = loadFromStorage<BroadcastMessage[]>(STORAGE_KEYS.BROADCASTS, INITIAL_BROADCASTS);
           for (const b of localBroadcasts) {
-            setDoc(doc(db, 'broadcasts', b.id), b).catch(() => {});
+            setDoc(doc(db, 'broadcasts', b.id), b).catch(err =>
+              handleFirestoreError(err, OperationType.WRITE, `broadcasts/${b.id}`)
+            );
           }
           return localBroadcasts;
         }
       }
     } catch (err) {
-      console.warn('Firestore fetch broadcasts fallback:', err);
+      if (auth.currentUser?.emailVerified) {
+        handleFirestoreError(err, OperationType.LIST, 'broadcasts');
+      }
     }
     return loadFromStorage<BroadcastMessage[]>(STORAGE_KEYS.BROADCASTS, INITIAL_BROADCASTS);
   },
@@ -535,12 +632,13 @@ export const BroadcastService = {
     broadcasts.unshift(created);
     saveToStorage(STORAGE_KEYS.BROADCASTS, broadcasts);
 
-    try {
-      if (db) {
-        await setDoc(doc(db, 'broadcasts', id), created);
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
+        await setDoc(doc(db, 'broadcasts', id), stripUndefined(created));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.CREATE, `broadcasts/${id}`);
       }
-    } catch (err) {
-      console.warn('Firestore save broadcast error:', err);
     }
 
     return created;

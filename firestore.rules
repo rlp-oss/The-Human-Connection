@@ -2,74 +2,593 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // =========================================================================
+    // Default-Deny Safety Net (Global Fortress Catch-All)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // Global Identity, Type & Hardening Primitives
+    // =========================================================================
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
     }
 
     function isSignedIn() {
       return request.auth != null;
     }
 
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
     function isMasterAdmin() {
-      return isSignedIn() &&
+      return isVerifiedUser() &&
         request.auth.token.email != null &&
         request.auth.token.email.lower() == 'codygermain032@gmail.com';
     }
 
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
+    function isValidEmailStr(val) {
+      return val is string &&
+        val.size() >= 3 &&
+        val.size() <= 150 &&
+        val.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
     }
 
-    // Connection check document
+    function isValidLicenseKeysMap(m) {
+      return m is map &&
+        m.size() <= 4 &&
+        m.keys().hasOnly(['Tome Crafter', 'RLM Pro Studio', 'ForgeOS App Builder', 'RL Easy Flow']) &&
+        (!('Tome Crafter' in m) || (m['Tome Crafter'] is string && m['Tome Crafter'].size() <= 128)) &&
+        (!('RLM Pro Studio' in m) || (m['RLM Pro Studio'] is string && m['RLM Pro Studio'].size() <= 128)) &&
+        (!('ForgeOS App Builder' in m) || (m['ForgeOS App Builder'] is string && m['ForgeOS App Builder'].size() <= 128)) &&
+        (!('RL Easy Flow' in m) || (m['RL Easy Flow'] is string && m['RL Easy Flow'].size() <= 128));
+    }
+
+    // =========================================================================
+    // Entity Validation Blueprints (Anti-Update-Gap & Schema Enforcement)
+    // =========================================================================
+
+    function isValidTester(data) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'name', 'email', 'github_handle', 'role',
+          'app_access_list', 'current_subscription_status', 'stripe_account_id',
+          'joined_at', 'total_royalties_received', 'last_active'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'name', 'email', 'github_handle', 'role',
+          'app_access_list', 'current_subscription_status', 'stripe_account_id',
+          'joined_at', 'total_royalties_received', 'last_active',
+          'license_keys', 'notes', 'email_welcomed'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerUid) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+        isValidEmailStr(data.email) &&
+        data.github_handle is string && data.github_handle.size() <= 100 &&
+        data.role in [
+          '$FOOD', '$MED', '$CREW', 'Developer', 'App Creator',
+          'OSS Maintainer', 'Artisan Author', 'Musician', 'Beta Tester'
+        ] &&
+        data.app_access_list is list &&
+        data.app_access_list.size() <= 4 &&
+        (data.app_access_list.size() == 0 || (
+          data.app_access_list[0] is string &&
+          data.app_access_list[0].size() <= 80 &&
+          data.app_access_list.hasOnly([
+            'Tome Crafter', 'RLM Pro Studio', 'ForgeOS App Builder', 'RL Easy Flow'
+          ])
+        )) &&
+        data.current_subscription_status in [
+          'Omega Direct-Rail', 'Omega Verified', 'Stripe Connect Active',
+          'Trial', 'Suspended', 'Active'
+        ] &&
+        data.stripe_account_id is string && data.stripe_account_id.size() <= 128 &&
+        data.joined_at is string && data.joined_at.size() >= 4 && data.joined_at.size() <= 64 &&
+        data.total_royalties_received is number &&
+        data.total_royalties_received >= 0 &&
+        data.total_royalties_received <= 100000000 &&
+        data.last_active is string && data.last_active.size() <= 100 &&
+        (!('license_keys' in data) || isValidLicenseKeysMap(data.license_keys)) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000)) &&
+        (!('email_welcomed' in data) || data.email_welcomed is bool);
+    }
+
+    function isValidReplyEntry(entry) {
+      return entry is map &&
+        entry.keys().hasAll(['sender', 'message', 'timestamp']) &&
+        entry.keys().hasOnly(['sender', 'message', 'timestamp']) &&
+        entry.sender is string && entry.sender.size() >= 1 && entry.sender.size() <= 100 &&
+        entry.message is string && entry.message.size() >= 1 && entry.message.size() <= 2000 &&
+        entry.timestamp is string && entry.timestamp.size() >= 4 && entry.timestamp.size() <= 64;
+    }
+
+    function isValidFeedback(data) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'tester_id', 'tester_name', 'tester_email',
+          'app_name', 'category', 'severity', 'subject', 'content',
+          'status', 'created_at'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'tester_id', 'tester_name', 'tester_email',
+          'app_name', 'category', 'severity', 'subject', 'content',
+          'status', 'created_at', 'reply_history'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerUid) &&
+        isValidId(data.tester_id) &&
+        data.tester_name is string && data.tester_name.size() >= 1 && data.tester_name.size() <= 100 &&
+        isValidEmailStr(data.tester_email) &&
+        data.app_name in ['Tome Crafter', 'RLM Pro Studio', 'ForgeOS App Builder', 'RL Easy Flow'] &&
+        data.category in ['Bug', 'Feature Request', 'Royalty Dispute', 'UX & Flow', 'General'] &&
+        data.severity in ['Critical', 'High', 'Medium', 'Low'] &&
+        data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 200 &&
+        data.content is string && data.content.size() >= 1 && data.content.size() <= 4000 &&
+        data.status in ['New', 'In Review', 'Resolved'] &&
+        data.created_at is string && data.created_at.size() >= 4 && data.created_at.size() <= 64 &&
+        (!('reply_history' in data) || (
+          data.reply_history is list &&
+          data.reply_history.size() <= 50 &&
+          (data.reply_history.size() == 0 || (
+            isValidReplyEntry(data.reply_history[0]) &&
+            isValidReplyEntry(data.reply_history[data.reply_history.size() - 1])
+          ))
+        ));
+    }
+
+    function isValidBroadcast(data) {
+      return data.keys().hasAll([
+          'id', 'subject', 'body_text', 'target_app', 'recipients_count',
+          'sent_at', 'status', 'sender_admin'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'subject', 'body_text', 'target_app', 'recipients_count',
+          'sent_at', 'status', 'key_takeaways', 'sender_admin'
+        ]) &&
+        isValidId(data.id) &&
+        data.subject is string && data.subject.size() >= 1 && data.subject.size() <= 200 &&
+        data.body_text is string && data.body_text.size() >= 1 && data.body_text.size() <= 5000 &&
+        data.target_app is string && data.target_app.size() >= 1 && data.target_app.size() <= 80 &&
+        data.recipients_count is number && data.recipients_count >= 0 && data.recipients_count <= 10000000 &&
+        data.sent_at is string && data.sent_at.size() >= 4 && data.sent_at.size() <= 64 &&
+        data.status in ['Delivered', 'Queued'] &&
+        data.sender_admin is string && data.sender_admin.size() >= 1 && data.sender_admin.size() <= 120 &&
+        (!('key_takeaways' in data) || (
+          data.key_takeaways is list &&
+          data.key_takeaways.size() <= 10 &&
+          (data.key_takeaways.size() == 0 || (
+            data.key_takeaways[0] is string && data.key_takeaways[0].size() <= 200 &&
+            data.key_takeaways[data.key_takeaways.size() - 1] is string &&
+            data.key_takeaways[data.key_takeaways.size() - 1].size() <= 200
+          ))
+        ));
+    }
+
+    function isValidCopyrightClaim(data) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'title', 'creator_name', 'creator_email', 'asset_type',
+          'repository_or_source', 'evidence_description', 'status', 'confidence_score',
+          'attribution_share_bps', 'micro_rate_usd', 'bank_connected', 'stripe_account_id',
+          'payout_balance_usd', 'total_payouts_claimed_usd', 'created_at'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'title', 'creator_name', 'creator_email', 'asset_type',
+          'repository_or_source', 'evidence_description', 'status', 'confidence_score',
+          'attribution_share_bps', 'micro_rate_usd', 'bank_connected', 'stripe_account_id',
+          'payout_balance_usd', 'total_payouts_claimed_usd', 'created_at', 'analysis_notes'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.ownerUid) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 200 &&
+        data.creator_name is string && data.creator_name.size() >= 1 && data.creator_name.size() <= 100 &&
+        isValidEmailStr(data.creator_email) &&
+        data.asset_type in [
+          'Code Library', 'Book / Literature', 'Music / Audio',
+          'Visual Art', 'Scientific Algorithm'
+        ] &&
+        data.repository_or_source is string && data.repository_or_source.size() >= 1 && data.repository_or_source.size() <= 500 &&
+        data.evidence_description is string && data.evidence_description.size() >= 1 && data.evidence_description.size() <= 2000 &&
+        data.status in ['Verified', 'Pending Review', 'Disputed'] &&
+        data.confidence_score is number && data.confidence_score >= 0 && data.confidence_score <= 100 &&
+        data.attribution_share_bps is number && data.attribution_share_bps >= 0 && data.attribution_share_bps <= 10000 &&
+        data.micro_rate_usd is string && data.micro_rate_usd.size() >= 1 && data.micro_rate_usd.size() <= 100 &&
+        data.bank_connected is bool &&
+        data.stripe_account_id is string && data.stripe_account_id.size() <= 128 &&
+        data.payout_balance_usd is number && data.payout_balance_usd >= 0 && data.payout_balance_usd <= 10000000 &&
+        data.total_payouts_claimed_usd is number && data.total_payouts_claimed_usd >= 0 && data.total_payouts_claimed_usd <= 10000000 &&
+        data.created_at is string && data.created_at.size() >= 4 && data.created_at.size() <= 64 &&
+        (!('analysis_notes' in data) || (data.analysis_notes is string && data.analysis_notes.size() <= 2000));
+    }
+
+    function isValidAppBadge(data) {
+      return data.keys().hasAll(['appId', 'isLinked', 'isActivated']) &&
+        data.keys().hasOnly([
+          'appId', 'developerName', 'isLinked', 'isActivated',
+          'royaltyBalance', 'c2paManifestHash', 'ftAuditId', 'storyIpAssetId', 'theme'
+        ]) &&
+        isValidId(data.appId) &&
+        data.isLinked is bool &&
+        data.isActivated is bool &&
+        (!('developerName' in data) || (data.developerName is string && data.developerName.size() <= 120)) &&
+        (!('royaltyBalance' in data) || (data.royaltyBalance is number && data.royaltyBalance >= 0 && data.royaltyBalance <= 100000000)) &&
+        (!('c2paManifestHash' in data) || (data.c2paManifestHash is string && data.c2paManifestHash.size() <= 128)) &&
+        (!('ftAuditId' in data) || (data.ftAuditId is string && data.ftAuditId.size() <= 128)) &&
+        (!('storyIpAssetId' in data) || (data.storyIpAssetId is string && data.storyIpAssetId.size() <= 128)) &&
+        (!('theme' in data) || (data.theme is string && data.theme.size() <= 64));
+    }
+
+    function isValidSocietyMetrics(data) {
+      return data.keys().hasAll([
+          'total_subscription_revenue_usd', 'society_fund_share_pct',
+          'total_society_fund_usd', 'unallocated_holding_escrow_usd',
+          'allocated_registered_pool_usd', 'total_active_subscribers',
+          'average_monthly_sub_price', 'per_subscriber_royalty_yield',
+          'estimated_payout_per_registered_creator', 'total_registered_creators',
+          'total_unregistered_claims', 'total_badge_integrated_apps',
+          'last_distribution_timestamp'
+        ]) &&
+        data.keys().hasOnly([
+          'total_subscription_revenue_usd', 'society_fund_share_pct',
+          'total_society_fund_usd', 'unallocated_holding_escrow_usd',
+          'allocated_registered_pool_usd', 'total_active_subscribers',
+          'average_monthly_sub_price', 'per_subscriber_royalty_yield',
+          'estimated_payout_per_registered_creator', 'total_registered_creators',
+          'total_unregistered_claims', 'total_badge_integrated_apps',
+          'last_distribution_timestamp'
+        ]) &&
+        data.total_subscription_revenue_usd is number && data.total_subscription_revenue_usd >= 0 &&
+        data.society_fund_share_pct == 50 &&
+        data.total_society_fund_usd is number && data.total_society_fund_usd >= 0 &&
+        data.unallocated_holding_escrow_usd is number && data.unallocated_holding_escrow_usd >= 0 &&
+        data.allocated_registered_pool_usd is number && data.allocated_registered_pool_usd >= 0 &&
+        data.total_active_subscribers is number && data.total_active_subscribers >= 0 &&
+        data.average_monthly_sub_price is number && data.average_monthly_sub_price >= 0 &&
+        data.per_subscriber_royalty_yield is number && data.per_subscriber_royalty_yield >= 0 &&
+        data.estimated_payout_per_registered_creator is number && data.estimated_payout_per_registered_creator >= 0 &&
+        data.total_registered_creators is number && data.total_registered_creators >= 0 &&
+        data.total_unregistered_claims is number && data.total_unregistered_claims >= 0 &&
+        data.total_badge_integrated_apps is number && data.total_badge_integrated_apps >= 0 &&
+        data.last_distribution_timestamp is string && data.last_distribution_timestamp.size() >= 4 && data.last_distribution_timestamp.size() <= 64;
+    }
+
+    function isValidCapturedSplit(data) {
+      return data.keys().hasAll([
+          'transactionId', 'ownerUid', 'grossAmountUsd', 'societyFundSplitUsd',
+          'appOperatorShareUsd', 'estimatedStripeFeeUsd', 'sourceAppId',
+          'sourceAppName', 'subscriberEmail', 'stripeTransferGroupId',
+          'c2paAuditHash', 'timestamp', 'status'
+        ]) &&
+        data.keys().hasOnly([
+          'transactionId', 'ownerUid', 'grossAmountUsd', 'societyFundSplitUsd',
+          'appOperatorShareUsd', 'estimatedStripeFeeUsd', 'sourceAppId',
+          'sourceAppName', 'subscriberEmail', 'stripeTransferGroupId',
+          'c2paAuditHash', 'timestamp', 'status'
+        ]) &&
+        isValidId(data.transactionId) &&
+        isValidId(data.ownerUid) &&
+        data.grossAmountUsd is number && data.grossAmountUsd >= 0 && data.grossAmountUsd <= 10000000 &&
+        data.societyFundSplitUsd is number && data.societyFundSplitUsd >= 0 &&
+        data.societyFundSplitUsd * 2 >= data.grossAmountUsd - 0.02 &&
+        data.societyFundSplitUsd * 2 <= data.grossAmountUsd + 0.02 &&
+        data.appOperatorShareUsd is number && data.appOperatorShareUsd >= 0 &&
+        data.estimatedStripeFeeUsd is number && data.estimatedStripeFeeUsd >= 0 &&
+        data.sourceAppId is string && data.sourceAppId.size() >= 1 && data.sourceAppId.size() <= 128 &&
+        data.sourceAppName is string && data.sourceAppName.size() >= 1 && data.sourceAppName.size() <= 120 &&
+        isValidEmailStr(data.subscriberEmail) &&
+        data.stripeTransferGroupId is string && data.stripeTransferGroupId.size() >= 1 && data.stripeTransferGroupId.size() <= 128 &&
+        data.c2paAuditHash is string && data.c2paAuditHash.size() >= 1 && data.c2paAuditHash.size() <= 256 &&
+        data.timestamp is string && data.timestamp.size() >= 4 && data.timestamp.size() <= 64 &&
+        data.status in ['Routed to Society Fund', 'Pending Escrow Allocation'];
+    }
+
+    function isValidDistributionRound(data) {
+      return data.keys().hasAll([
+          'round_id', 'timestamp', 'total_distributed_usd', 'subscribers_at_execution',
+          'creators_paid_count', 'average_payout_per_creator', 'status',
+          'stripe_batch_id', 'c2pa_audit_seal'
+        ]) &&
+        data.keys().hasOnly([
+          'round_id', 'timestamp', 'total_distributed_usd', 'subscribers_at_execution',
+          'creators_paid_count', 'average_payout_per_creator', 'status',
+          'stripe_batch_id', 'c2pa_audit_seal'
+        ]) &&
+        isValidId(data.round_id) &&
+        data.timestamp is string && data.timestamp.size() >= 4 && data.timestamp.size() <= 80 &&
+        data.total_distributed_usd is number && data.total_distributed_usd >= 0 &&
+        data.subscribers_at_execution is number && data.subscribers_at_execution >= 0 &&
+        data.creators_paid_count is number && data.creators_paid_count >= 0 &&
+        data.average_payout_per_creator is number && data.average_payout_per_creator >= 0 &&
+        data.status in ['Completed', 'Processing', 'Scheduled'] &&
+        data.stripe_batch_id is string && data.stripe_batch_id.size() >= 1 && data.stripe_batch_id.size() <= 128 &&
+        data.c2pa_audit_seal is string && data.c2pa_audit_seal.size() >= 1 && data.c2pa_audit_seal.size() <= 128;
+    }
+
+    // =========================================================================
+    // 1. Connectivity Probe (Single Document Get-Only)
+    // =========================================================================
     match /test/connection {
-      allow read: if true;
+      allow get: if true;
+      allow list, create, update, delete: if false;
     }
 
-    // Beta Testers collection
+    // =========================================================================
+    // 2. Beta Testers & Contributors (Strict PII Isolation)
+    // =========================================================================
     match /testers/{testerId} {
-      allow list: if true;
-      allow get: if isValidId(testerId);
-      allow create: if isValidId(testerId);
-      allow update: if isValidId(testerId);
+      allow get: if isValidId(testerId) && (
+        isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid);
+      allow create: if isVerifiedUser() &&
+        isValidId(testerId) &&
+        isValidTester(incoming()) &&
+        incoming().id == testerId && (
+          isMasterAdmin() || (
+            incoming().ownerUid == request.auth.uid &&
+            incoming().role == 'Beta Tester' &&
+            incoming().total_royalties_received == 0 &&
+            incoming().current_subscription_status in ['Trial', 'Omega Direct-Rail']
+          )
+        );
+      allow update: if isVerifiedUser() &&
+        isValidId(testerId) &&
+        isValidTester(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().joined_at == existing().joined_at && (
+          (
+            isMasterAdmin() &&
+            (!('ownerUid' in existing()) || incoming().ownerUid == existing().ownerUid)
+          ) || (
+            ('ownerUid' in existing()) &&
+            existing().ownerUid == request.auth.uid &&
+            incoming().ownerUid == existing().ownerUid &&
+            existing().current_subscription_status != 'Suspended' && (
+              incoming().diff(existing()).affectedKeys().hasOnly(['name', 'github_handle', 'notes', 'last_active']) ||
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly(['app_access_list', 'license_keys', 'current_subscription_status', 'last_active']) &&
+                incoming().current_subscription_status in ['Trial', 'Omega Direct-Rail']
+              )
+            )
+          )
+        );
       allow delete: if isMasterAdmin() && isValidId(testerId);
     }
 
-    // Feedbacks collection
+    // =========================================================================
+    // 3. Feedbacks (Strict PII Isolation & Terminal State Lock)
+    // =========================================================================
     match /feedbacks/{feedbackId} {
-      allow list: if true;
-      allow get: if isValidId(feedbackId);
-      allow create: if isValidId(feedbackId);
-      allow update: if isValidId(feedbackId);
+      allow get: if isValidId(feedbackId) && (
+        isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid);
+      allow create: if isVerifiedUser() &&
+        isValidId(feedbackId) &&
+        isValidFeedback(incoming()) &&
+        incoming().id == feedbackId && (
+          isMasterAdmin() || (
+            incoming().ownerUid == request.auth.uid &&
+            incoming().status == 'New' &&
+            !('reply_history' in incoming())
+          )
+        );
+      allow update: if isVerifiedUser() &&
+        isValidId(feedbackId) &&
+        isValidFeedback(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().tester_id == existing().tester_id &&
+        incoming().created_at == existing().created_at && (
+          (
+            isMasterAdmin() &&
+            (!('ownerUid' in existing()) || incoming().ownerUid == existing().ownerUid)
+          ) || (
+            ('ownerUid' in existing()) &&
+            existing().ownerUid == request.auth.uid &&
+            incoming().ownerUid == existing().ownerUid &&
+            existing().status == 'New' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['subject', 'content', 'severity'])
+          )
+        );
       allow delete: if isMasterAdmin() && isValidId(feedbackId);
     }
 
-    // Broadcasts collection (Master Admin only for publishing or deletion)
+    // =========================================================================
+    // 4. Broadcasts (Non-PII Announcements, Master Admin Write-Only)
+    // =========================================================================
     match /broadcasts/{broadcastId} {
-      allow list: if true;
-      allow get: if isValidId(broadcastId);
-      allow create: if isMasterAdmin() && isValidId(broadcastId);
-      allow update: if isMasterAdmin() && isValidId(broadcastId);
+      allow get: if isValidId(broadcastId) && (existing().status == 'Delivered' || isMasterAdmin());
+      allow list: if existing().status == 'Delivered' || isMasterAdmin();
+      allow create: if isMasterAdmin() &&
+        isValidId(broadcastId) &&
+        isValidBroadcast(incoming()) &&
+        incoming().id == broadcastId;
+      allow update: if isMasterAdmin() &&
+        isValidId(broadcastId) &&
+        isValidBroadcast(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().sent_at == existing().sent_at &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['subject', 'body_text', 'target_app', 'recipients_count', 'status', 'key_takeaways', 'sender_admin']);
       allow delete: if isMasterAdmin() && isValidId(broadcastId);
     }
 
-    // Creator Claims collection
+    // =========================================================================
+    // 5. Creator Claims (PII & Financial Payout Balance Isolated)
+    // =========================================================================
     match /creator_claims/{claimId} {
-      allow list: if true;
-      allow get: if isValidId(claimId);
-      allow create: if isValidId(claimId);
-      allow update: if isValidId(claimId);
+      allow get: if isValidId(claimId) && (
+        isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid);
+      allow create: if isVerifiedUser() &&
+        isValidId(claimId) &&
+        isValidCopyrightClaim(incoming()) &&
+        incoming().id == claimId && (
+          isMasterAdmin() || (
+            incoming().ownerUid == request.auth.uid &&
+            incoming().status == 'Pending Review' &&
+            incoming().payout_balance_usd == 0 &&
+            incoming().total_payouts_claimed_usd == 0
+          )
+        );
+      allow update: if isVerifiedUser() &&
+        isValidId(claimId) &&
+        isValidCopyrightClaim(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().created_at == existing().created_at && (
+          (
+            isMasterAdmin() &&
+            (!('ownerUid' in existing()) || incoming().ownerUid == existing().ownerUid)
+          ) || (
+            ('ownerUid' in existing()) &&
+            existing().ownerUid == request.auth.uid &&
+            incoming().ownerUid == existing().ownerUid &&
+            existing().status != 'Verified' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'repository_or_source', 'evidence_description'])
+          )
+        );
       allow delete: if isMasterAdmin() && isValidId(claimId);
     }
 
-    // App Badges & C2PA Manifest records (Master Admin exclusive for write/modify/delete)
+    // =========================================================================
+    // 6. Copyright Claims (Escrow Release Claims - PII & Financial Isolated)
+    // =========================================================================
+    match /copyright_claims/{claimId} {
+      allow get: if isValidId(claimId) && (
+        isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid);
+      allow create: if isVerifiedUser() &&
+        isValidId(claimId) &&
+        isValidCopyrightClaim(incoming()) &&
+        incoming().id == claimId && (
+          isMasterAdmin() || (
+            incoming().ownerUid == request.auth.uid &&
+            incoming().status == 'Pending Review' &&
+            incoming().payout_balance_usd == 0 &&
+            incoming().total_payouts_claimed_usd == 0
+          )
+        );
+      allow update: if isVerifiedUser() &&
+        isValidId(claimId) &&
+        isValidCopyrightClaim(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().created_at == existing().created_at && (
+          (
+            isMasterAdmin() &&
+            (!('ownerUid' in existing()) || incoming().ownerUid == existing().ownerUid)
+          ) || (
+            ('ownerUid' in existing()) &&
+            existing().ownerUid == request.auth.uid &&
+            incoming().ownerUid == existing().ownerUid &&
+            existing().status != 'Verified' &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['title', 'repository_or_source', 'evidence_description'])
+          )
+        );
+      allow delete: if isMasterAdmin() && isValidId(claimId);
+    }
+
+    // =========================================================================
+    // 7. App Badges & C2PA Manifests (Master Admin Write-Only)
+    // =========================================================================
     match /app_badges/{badgeId} {
-      allow list: if true;
-      allow get: if isValidId(badgeId);
-      allow create: if isMasterAdmin() && isValidId(badgeId);
-      allow update: if isMasterAdmin() && isValidId(badgeId);
+      allow get: if isValidId(badgeId) && (existing().isActivated == true || isMasterAdmin());
+      allow list: if existing().isActivated == true || isMasterAdmin();
+      allow create: if isMasterAdmin() &&
+        isValidId(badgeId) &&
+        isValidAppBadge(incoming()) &&
+        incoming().appId == badgeId;
+      allow update: if isMasterAdmin() &&
+        isValidId(badgeId) &&
+        isValidAppBadge(incoming()) &&
+        incoming().appId == existing().appId &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'developerName', 'isLinked', 'isActivated', 'royaltyBalance',
+          'c2paManifestHash', 'ftAuditId', 'storyIpAssetId', 'theme'
+        ]);
       allow delete: if isMasterAdmin() && isValidId(badgeId);
+    }
+
+    // =========================================================================
+    // 8. Society Fund Metrics Singleton (Master Admin Write-Only, 50% Covenant Locked)
+    // =========================================================================
+    match /society_metrics/{metricId} {
+      allow get: if isValidId(metricId) && metricId == 'live_summary';
+      allow list: if false;
+      allow create: if isMasterAdmin() &&
+        metricId == 'live_summary' &&
+        isValidSocietyMetrics(incoming());
+      allow update: if isMasterAdmin() &&
+        metricId == 'live_summary' &&
+        isValidSocietyMetrics(incoming()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'total_subscription_revenue_usd', 'society_fund_share_pct',
+          'total_society_fund_usd', 'unallocated_holding_escrow_usd',
+          'allocated_registered_pool_usd', 'total_active_subscribers',
+          'average_monthly_sub_price', 'per_subscriber_royalty_yield',
+          'estimated_payout_per_registered_creator', 'total_registered_creators',
+          'total_unregistered_claims', 'total_badge_integrated_apps',
+          'last_distribution_timestamp'
+        ]);
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 9. Captured Subscription Splits (Immutable Financial & Subscriber PII Ledger)
+    // =========================================================================
+    match /captured_splits/{splitId} {
+      allow get: if isValidId(splitId) && (
+        isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid)
+      );
+      allow list: if isMasterAdmin() ||
+        (isVerifiedUser() && ('ownerUid' in existing()) && existing().ownerUid == request.auth.uid);
+      allow create: if isMasterAdmin() &&
+        isValidId(splitId) &&
+        isValidCapturedSplit(incoming()) &&
+        incoming().transactionId == splitId;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // =========================================================================
+    // 10. Distribution Rounds (Public Completed Audit Log, Master Admin Write-Only)
+    // =========================================================================
+    match /distribution_rounds/{roundId} {
+      allow get: if isValidId(roundId) && (existing().status == 'Completed' || isMasterAdmin());
+      allow list: if existing().status == 'Completed' || isMasterAdmin();
+      allow create: if isMasterAdmin() &&
+        isValidId(roundId) &&
+        isValidDistributionRound(incoming()) &&
+        incoming().round_id == roundId;
+      allow update: if isMasterAdmin() &&
+        isValidId(roundId) &&
+        isValidDistributionRound(incoming()) &&
+        incoming().round_id == existing().round_id &&
+        existing().status != 'Completed' &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'timestamp', 'total_distributed_usd', 'subscribers_at_execution',
+          'creators_paid_count', 'average_payout_per_creator', 'status',
+          'stripe_batch_id', 'c2pa_audit_seal'
+        ]);
+      allow delete: if false;
     }
   }
 }
-

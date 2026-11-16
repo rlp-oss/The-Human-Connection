@@ -32,7 +32,7 @@ import {
   getOrCreateFolder,
   GoogleDriveFile,
 } from '../services/driveService.ts';
-import { auth, signInWithGoogle, getAccessToken, logOut } from '../lib/firebase.ts';
+import { auth, signInWithGoogle, getAccessToken, getFirebaseAuthHeaders, logOut } from '../lib/firebase.ts';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { Tester, CopyrightClaim, FeedbackItem, BroadcastMessage } from '../types.ts';
 import axios from 'axios';
@@ -91,24 +91,34 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
         if (token) {
           fetchFiles(token);
         }
+        if (user.emailVerified) {
+          fetchBackupHistory(user);
+        }
       } else {
         setAccessToken(null);
         setDriveFiles([]);
+        setRecentBackups([]);
       }
     });
 
-    fetchBackupHistory();
+    if (auth.currentUser?.emailVerified) {
+      fetchBackupHistory(auth.currentUser);
+    }
 
     return () => unsubscribe();
   }, []);
 
-  const fetchBackupHistory = async () => {
+  const fetchBackupHistory = async (userOverride?: User | null) => {
+    const activeUser = userOverride ?? auth.currentUser;
+    if (!activeUser?.emailVerified) return;
     try {
-      const res = await axios.get('/api/drive/backups');
+      const headers = await getFirebaseAuthHeaders();
+      if (!headers.Authorization) return;
+      const res = await axios.get('/api/drive/backups', { headers });
       if (res.data?.backups) {
         setRecentBackups(res.data.backups);
       }
-    } catch (e) {
+    } catch {
       console.warn('Could not fetch backup history');
     }
   };
@@ -226,15 +236,20 @@ export const GoogleDriveManagerModal: React.FC<GoogleDriveManagerModalProps> = (
       });
 
       // 4. Record backup metadata in local registry
-      await axios.post('/api/drive/backups', {
-        userUid: currentUser.uid,
-        userEmail: currentUser.email,
-        fileId: uploadedFile.id,
-        fileName: filename,
-        fileUrl: uploadedFile.webViewLink,
-        backupType: 'full_ecosystem',
-        itemCount: testers.length + claims.length + feedback.length,
-      }).catch(() => {});
+      const authHeaders = await getFirebaseAuthHeaders();
+      await axios.post(
+        '/api/drive/backups',
+        {
+          userUid: currentUser.uid,
+          userEmail: currentUser.email,
+          fileId: uploadedFile.id,
+          fileName: filename,
+          fileUrl: uploadedFile.webViewLink,
+          backupType: 'full_ecosystem',
+          itemCount: testers.length + claims.length + feedback.length,
+        },
+        { headers: authHeaders }
+      ).catch(() => {});
 
       setStatusMessage({
         type: 'success',

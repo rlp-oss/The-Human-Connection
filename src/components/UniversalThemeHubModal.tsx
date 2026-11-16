@@ -23,6 +23,7 @@ import {
 import { useTheme, ThemeMode, AccentPalette } from '../context/ThemeContext';
 import { EmeraldHumanNetworkLogoIcon, HumanLogo } from './HumanLogo';
 import { UniversalEcosystemBrandingConfig } from '../types';
+import { getFirebaseAuthHeaders } from '../lib/firebase';
 import axios from 'axios';
 
 export const UniversalThemeHubModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({
@@ -86,10 +87,15 @@ export const UniversalThemeHubModal: React.FC<{ isOpen: boolean; onClose: () => 
     setBroadcastSuccess(null);
 
     try {
-      const response = await axios.post('/api/ecosystem/theme/update', {
-        globalTheme: ecosystemConfig.globalTheme,
-        connectedApps: ecosystemConfig.connectedApps.map(a => ({ ...a, status: 'Synced' }))
-      });
+      const headers = await getFirebaseAuthHeaders();
+      const response = await axios.post(
+        '/api/ecosystem/theme/update',
+        {
+          globalTheme: ecosystemConfig.globalTheme,
+          connectedApps: ecosystemConfig.connectedApps.map(a => ({ ...a, status: 'Synced' }))
+        },
+        { headers }
+      );
 
       if (response.data?.success) {
         setBroadcastSuccess('Universal theme tokens broadcasted to 4 apps & remote CDN stylesheets updated.');

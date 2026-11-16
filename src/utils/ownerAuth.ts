@@ -19,7 +19,7 @@ if (typeof window !== 'undefined') {
  * Only codygermain032@gmail.com returns true. All other users and unauthenticated guests return false.
  */
 export function isUserMasterAdmin(user?: User | null): boolean {
-  if (!user || !user.email) {
+  if (!user || !user.email || !user.emailVerified) {
     return false;
   }
   return user.email.toLowerCase().trim() === MASTER_ADMIN_EMAIL.toLowerCase();

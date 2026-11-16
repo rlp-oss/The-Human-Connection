@@ -26,6 +26,7 @@ export interface FleetAppDescriptor {
   name: string;
   code: string;
   description: string;
+  appUrl?: string;
 }
 
 export const FLEET_APPS_REGISTRY: Record<FleetAppId, FleetAppDescriptor> = {
@@ -34,36 +35,42 @@ export const FLEET_APPS_REGISTRY: Record<FleetAppId, FleetAppDescriptor> = {
     name: 'H.U.M.A.N. Sovereign Hub',
     code: 'FT-ETHIC-HUB-2026',
     description: 'Core H.U.M.A.N. Governance, Compliance & 50% Covenant Clearinghouse',
+    appUrl: 'https://humanethicalai.ai.studio',
   },
   'tome-crafter': {
     appId: 'tome-crafter',
     name: 'Tome Crafter',
     code: 'FT-ETHIC-TOME-2026',
     description: 'Ethical Narrative & Knowledge Graph Authoring Studio',
+    appUrl: 'https://tomecrafter-ai-book-studio.ai.studio',
   },
   'forge-os': {
     appId: 'forge-os',
     name: 'Forge OS',
     code: 'FT-ETHIC-FORGE-2026',
     description: 'Cleanroom Sovereign Developer Workspace & Agent Runtime',
+    appUrl: 'https://reforgeos-live.ai.studio',
   },
   'rlm-pro-studio': {
     appId: 'rlm-pro-studio',
     name: 'RLM Pro Studio',
     code: 'FT-ETHIC-RLMPRO-2026',
     description: 'Recursive Learning Model Orchestration & Telemetry Workbench',
+    appUrl: 'https://rlm-pro-studio.ai.studio',
   },
   'rl-easy-flow': {
     appId: 'rl-easy-flow',
     name: 'RL Easy Flow',
     code: 'FT-ETHIC-RLFLOW-2026',
     description: 'Visual Policy & Workflow Synthesis Pipeline',
+    appUrl: 'https://rl-easy-flow.ai.studio',
   },
   'rlmv-editor': {
     appId: 'rlmv-editor',
     name: 'RLMV Music Video Editor',
     code: 'FT-ETHIC-RLMV-VIDEO-2026',
     description: 'AI-Assisted Music Video Timeline & C2PA Verification Editor',
+    appUrl: '',
   },
 };
 

@@ -30,7 +30,8 @@ import {
   INITIAL_CREATOR_ACCOUNTS,
   INITIAL_UNREGISTERED_ESCROW
 } from './initialData';
-import { db } from '../lib/firebase';
+import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { isUserMasterAdmin } from '../utils/ownerAuth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 // Storage keys
@@ -79,6 +80,7 @@ export interface SubscriptionPaymentEvent {
 
 export interface CapturedSubscriptionSplit {
   transactionId: string;
+  ownerUid?: string;
   grossAmountUsd: number;
   societyFundSplitUsd: number; // Exactly 50%
   appOperatorShareUsd: number; // 50%
@@ -225,14 +227,18 @@ export class StripeDistributionService {
     if (royaltyEvents.length > 50) royaltyEvents.pop();
     setStored(STORAGE_KEYS.ROYALTY_EVENTS, royaltyEvents);
 
-    // 4. If Firestore is active, save remote document
-    try {
-      if (db) {
+    // 4. If authenticated Master Admin, persist remote audit documents
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await setDoc(doc(db, 'society_metrics', 'live_summary'), updatedMetrics, { merge: true });
-        await setDoc(doc(db, 'captured_splits', txId), splitResult);
+        await setDoc(doc(db, 'captured_splits', txId), {
+          ...splitResult,
+          ownerUid: currentUser.uid,
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `captured_splits/${txId}`);
       }
-    } catch {
-      // Graceful fallback to localStorage
     }
 
     return splitResult;
@@ -383,14 +389,15 @@ export class StripeDistributionService {
     };
     setStored(STORAGE_KEYS.SOCIETY_METRICS, updatedMetrics);
 
-    // 4. If Firestore is active, sync remote documents
-    try {
-      if (db) {
+    // 4. If authenticated Master Admin, sync remote documents
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await setDoc(doc(db, 'society_metrics', 'live_summary'), updatedMetrics, { merge: true });
         await setDoc(doc(db, 'distribution_rounds', plan.roundId), newRound);
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `distribution_rounds/${plan.roundId}`);
       }
-    } catch {
-      // Fallback
     }
 
     return {
@@ -420,8 +427,11 @@ export class StripeDistributionService {
           return data;
         }
       }
-    } catch {
-      // fall through
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Missing or insufficient permissions') || msg.includes('permission-denied')) {
+        handleFirestoreError(err, OperationType.GET, 'society_metrics/live_summary');
+      }
     }
     return getStored<SocietyFundMetrics>(STORAGE_KEYS.SOCIETY_METRICS, INITIAL_SOCIETY_FUND_METRICS);
   }
@@ -554,13 +564,17 @@ export class StripeDistributionService {
     setStored('human_copyright_claims_v1', claims);
     setStored(STORAGE_KEYS.SOCIETY_METRICS, metrics);
 
-    try {
-      if (db) {
+    const currentUser = auth.currentUser;
+    if (db && currentUser?.emailVerified && isUserMasterAdmin(currentUser)) {
+      try {
         await setDoc(doc(db, 'society_metrics', 'live_summary'), metrics, { merge: true });
-        await setDoc(doc(db, 'copyright_claims', newClaim.id), newClaim);
+        await setDoc(doc(db, 'copyright_claims', newClaim.id), {
+          ...newClaim,
+          ownerUid: currentUser.uid,
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `copyright_claims/${newClaim.id}`);
       }
-    } catch {
-      // Fallback
     }
 
     return {

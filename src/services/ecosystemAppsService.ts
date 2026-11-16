@@ -1,3 +1,5 @@
+import { getFirebaseAuthHeaders } from '../lib/firebase';
+
 export interface EcosystemAppEntry {
   id: string;
   name: string;
@@ -27,7 +29,7 @@ export interface EcosystemAppEntry {
   };
 }
 
-export const ECOSYSTEM_STORAGE_KEY = 'human_app_integrations_v6';
+export const ECOSYSTEM_STORAGE_KEY = 'human_app_integrations_v7';
 export const ECOSYSTEM_UPDATED_EVENT = 'human-ecosystem-apps-updated';
 
 export const DEFAULT_ECOSYSTEM_APPS: EcosystemAppEntry[] = [
@@ -245,9 +247,10 @@ export async function upsertEcosystemApp(
   payload: Partial<EcosystemAppEntry> & { name: string; appId: string }
 ): Promise<EcosystemAppEntry[]> {
   try {
+    const authHeaders = await getFirebaseAuthHeaders();
     const res = await fetch('/api/ecosystem/apps', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeaders },
       body: JSON.stringify(payload),
     });
     if (res.ok) {
@@ -304,7 +307,11 @@ export async function upsertEcosystemApp(
 
 export async function removeEcosystemApp(id: string): Promise<EcosystemAppEntry[]> {
   try {
-    const res = await fetch(`/api/ecosystem/apps/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const authHeaders = await getFirebaseAuthHeaders();
+    const res = await fetch(`/api/ecosystem/apps/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: authHeaders,
+    });
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data.apps)) {
@@ -327,9 +334,10 @@ export async function pingEcosystemAppUrl(url: string): Promise<{
   checkedAt: string;
   error?: string;
 }> {
+  const authHeaders = await getFirebaseAuthHeaders();
   const res = await fetch('/api/ecosystem/ping-url', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders },
     body: JSON.stringify({ url }),
   });
   return res.json();
